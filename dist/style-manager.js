@@ -118,6 +118,7 @@ var DEFAULT_ALT_SCHEMES = [
 ];
 
 var initialStyleState = {
+    activeTab: 0, // 0 = Main Theme, 1 = Alt Schemes
     activePresetId: 'cyber-neon',
     useCustomPalette: false,
     selectedSlotIndex: 0,
@@ -482,23 +483,71 @@ function updateCustomAltColor(key, val) {
     updateStyleState({ customAltSchemes: alts });
 }
 
-var styleWindow = (function(wConfig) {
+var lastWindowPos = null;
+
+function switchTab(targetIdx) {
+    updateStyleState({ activeTab: targetIdx });
+    if (targetIdx === 0) {
+        if (altWindow && altWindow.ua) {
+            lastWindowPos = { x: altWindow.ua.x, y: altWindow.ua.y };
+            altWindow.close();
+        }
+        mainThemeWindow.open();
+        if (lastWindowPos && mainThemeWindow.ua) {
+            mainThemeWindow.ua.x = lastWindowPos.x;
+            mainThemeWindow.ua.y = lastWindowPos.y;
+        }
+    } else {
+        if (mainThemeWindow && mainThemeWindow.ua) {
+            lastWindowPos = { x: mainThemeWindow.ua.x, y: mainThemeWindow.ua.y };
+            mainThemeWindow.close();
+        }
+        altWindow.open();
+        if (lastWindowPos && altWindow.ua) {
+            altWindow.ua.x = lastWindowPos.x;
+            altWindow.ua.y = lastWindowPos.y;
+        }
+    }
+}
+
+function syncRideList() {
+    var rList = getRides();
+    var curIdx = styleStore.get().targetRideIndex;
+    var newIdx = (curIdx >= 0 && curIdx < rList.length) ? curIdx : (rList.length > 0 ? 0 : -1);
+    updateStyleState({
+        rides: rList,
+        targetRideIndex: newIdx
+    });
+}
+
+// ==================== WINDOW 1: MAIN THEME ====================
+var mainThemeWindow = (function(wConfig) {
     return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 605, min: 605, max: 605 },
-    onOpen: function() {
-        var rList = getRides();
-        var curIdx = styleStore.get().targetRideIndex;
-        var newIdx = (curIdx >= 0 && curIdx < rList.length) ? curIdx : (rList.length > 0 ? 0 : -1);
-        updateStyleState({
-            rides: rList,
-            targetRideIndex: newIdx
-        });
-    },
+    height: { value: 435, min: 435, max: 435 },
+    onOpen: syncRideList,
     content: [
-        // ================= SECTION 1: STYLE PRESETS =================
+        // Top Tab Buttons
+        ht({
+            content: [
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎨 Main Theme',
+                    width: '50%',
+                    isPressed: true,
+                    onClick: function() { switchTab(0); }
+                }),
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎢 Alt Schemes',
+                    width: '50%',
+                    isPressed: false,
+                    onClick: function() { switchTab(1); }
+                })
+            ]
+        }),
+
+        // Style Presets Groupbox
         kt({
             text: 'Style Presets',
             content: ft({
@@ -601,7 +650,120 @@ var styleWindow = (function(wConfig) {
             })
         }),
 
-        // ================= SECTION 2: ALT PRESETS =================
+        // Park-Wide Batch Styling Groupbox
+        kt({
+            text: 'Park-Wide Batch Styling',
+            content: ft({
+                content: [
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'All tracks',
+                                width: '50%',
+                                isChecked: styleStore.get().globalTrack,
+                                onChange: function(val) { updateStyleState({ globalTrack: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'All vehicles',
+                                width: '50%',
+                                isChecked: styleStore.get().globalVehicle,
+                                onChange: function(val) { updateStyleState({ globalVehicle: val }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'All stations',
+                                width: '50%',
+                                isChecked: styleStore.get().globalStation,
+                                onChange: function(val) { updateStyleState({ globalStation: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'All guests & stalls',
+                                width: '50%',
+                                isChecked: styleStore.get().globalGuests,
+                                onChange: function(val) { updateStyleState({ globalGuests: val }); }
+                            })
+                        ]
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply to Entire Park',
+                        height: '24px',
+                        onClick: executeApplyParkWide
+                    })
+                ]
+            })
+        }),
+
+        // Individual Ride Styling Groupbox
+        kt({
+            text: 'Individual Ride Styling',
+            content: ft({
+                content: [
+                    (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                        items: Mt(styleStore, function(st) {
+                            var rList = (st.rides && st.rides.length > 0) ? st.rides : getRides();
+                            return rList.map(function(r) { return r.name; });
+                        }),
+                        selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
+                        onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
+                    }),
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Track Color',
+                                width: '50%',
+                                isChecked: styleStore.get().singleTrack,
+                                onChange: function(val) { updateStyleState({ singleTrack: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Vehicle Color',
+                                width: '50%',
+                                isChecked: styleStore.get().singleVehicle,
+                                onChange: function(val) { updateStyleState({ singleVehicle: val }); }
+                            })
+                        ]
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply to Selected Ride',
+                        height: '24px',
+                        onClick: executeApplySingleRide
+                    })
+                ]
+            })
+        })
+    ]
+});
+
+// ==================== WINDOW 2: ALT SCHEMES ====================
+var altWindow = (function(wConfig) {
+    return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
+})({
+    title: 'Style Manager (v0.1.0-beta)',
+    width: { value: 320, min: 320, max: 320 },
+    height: { value: 380, min: 380, max: 380 },
+    onOpen: syncRideList,
+    content: [
+        // Top Tab Buttons
+        ht({
+            content: [
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎨 Main Theme',
+                    width: '50%',
+                    isPressed: false,
+                    onClick: function() { switchTab(0); }
+                }),
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎢 Alt Schemes',
+                    width: '50%',
+                    isPressed: true,
+                    onClick: function() { switchTab(1); }
+                })
+            ]
+        }),
+
+        // Alternative Colour Schemes Groupbox
         kt({
             text: 'Alternative Colour Schemes (Alt Presets)',
             content: ft({
@@ -698,55 +860,9 @@ var styleWindow = (function(wConfig) {
             })
         }),
 
-        // ================= SECTION 3: PARK-WIDE BATCH STYLING =================
+        // Quick Apply Box in Tab 2
         kt({
-            text: 'Park-Wide Batch Styling',
-            content: ft({
-                content: [
-                    ht({
-                        content: [
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'All tracks',
-                                width: '50%',
-                                isChecked: styleStore.get().globalTrack,
-                                onChange: function(val) { updateStyleState({ globalTrack: val }); }
-                            }),
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'All vehicles',
-                                width: '50%',
-                                isChecked: styleStore.get().globalVehicle,
-                                onChange: function(val) { updateStyleState({ globalVehicle: val }); }
-                            })
-                        ]
-                    }),
-                    ht({
-                        content: [
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'All stations',
-                                width: '50%',
-                                isChecked: styleStore.get().globalStation,
-                                onChange: function(val) { updateStyleState({ globalStation: val }); }
-                            }),
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'All guests & stalls',
-                                width: '50%',
-                                isChecked: styleStore.get().globalGuests,
-                                onChange: function(val) { updateStyleState({ globalGuests: val }); }
-                            })
-                        ]
-                    }),
-                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                        text: 'Apply to Entire Park',
-                        height: '24px',
-                        onClick: executeApplyParkWide
-                    })
-                ]
-            })
-        }),
-
-        // ================= SECTION 4: INDIVIDUAL RIDE STYLING =================
-        kt({
-            text: 'Individual Ride Styling',
+            text: 'Apply Alt Schemes to Rides',
             content: ft({
                 content: [
                     (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
@@ -757,26 +873,15 @@ var styleWindow = (function(wConfig) {
                         selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
                         onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
                     }),
-                    ht({
-                        content: [
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Track Color',
-                                width: '50%',
-                                isChecked: styleStore.get().singleTrack,
-                                onChange: function(val) { updateStyleState({ singleTrack: val }); }
-                            }),
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Vehicle Color',
-                                width: '50%',
-                                isChecked: styleStore.get().singleVehicle,
-                                onChange: function(val) { updateStyleState({ singleVehicle: val }); }
-                            })
-                        ]
-                    }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                        text: 'Apply to Selected Ride',
+                        text: 'Apply Alt Schemes to Selected Ride',
                         height: '24px',
                         onClick: executeApplySingleRide
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply Alt Schemes to Entire Park',
+                        height: '24px',
+                        onClick: executeApplyParkWide
                     })
                 ]
             })
@@ -794,7 +899,12 @@ registerPlugin({
     main: function() {
         if (typeof ui !== 'undefined') {
             ui.registerMenuItem('Style Manager', function() {
-                styleWindow.open();
+                var curTab = styleStore.get().activeTab || 0;
+                if (curTab === 1) {
+                    altWindow.open();
+                } else {
+                    mainThemeWindow.open();
+                }
             });
         }
     }
