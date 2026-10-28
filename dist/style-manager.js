@@ -8,38 +8,17 @@ try {
 } catch (e) {}
 
 var OPENRCT2_COLORS = [
-    { id: 0, name: 'Black' },
-    { id: 1, name: 'Grey' },
-    { id: 2, name: 'White' },
-    { id: 3, name: 'Dark Purple' },
-    { id: 4, name: 'Light Purple' },
-    { id: 5, name: 'Bright Purple' },
-    { id: 6, name: 'Dark Blue' },
-    { id: 7, name: 'Light Blue' },
-    { id: 8, name: 'Icy Blue' },
-    { id: 9, name: 'Teal / Dark Water' },
-    { id: 10, name: 'Aquamarine / Light Water' },
-    { id: 11, name: 'Saturated Green' },
-    { id: 12, name: 'Dark Green' },
-    { id: 13, name: 'Moss Green' },
-    { id: 14, name: 'Bright Green' },
-    { id: 15, name: 'Olive Green' },
-    { id: 16, name: 'Dark Olive Green' },
-    { id: 17, name: 'Bright Yellow' },
-    { id: 18, name: 'Yellow' },
-    { id: 19, name: 'Dark Yellow' },
-    { id: 20, name: 'Light Orange' },
-    { id: 21, name: 'Dark Orange' },
-    { id: 22, name: 'Light Brown' },
-    { id: 23, name: 'Saturated Brown' },
-    { id: 24, name: 'Dark Brown' },
-    { id: 25, name: 'Salmon Pink' },
-    { id: 26, name: 'Bordeaux Red' },
-    { id: 27, name: 'Saturated Red' },
-    { id: 28, name: 'Bright Red' },
-    { id: 29, name: 'Dark Pink' },
-    { id: 30, name: 'Bright Pink' },
-    { id: 31, name: 'Light Pink' }
+    { id: 0, name: 'Black' }, { id: 1, name: 'Grey' }, { id: 2, name: 'White' },
+    { id: 3, name: 'Dark Purple' }, { id: 4, name: 'Light Purple' }, { id: 5, name: 'Bright Purple' },
+    { id: 6, name: 'Dark Blue' }, { id: 7, name: 'Light Blue' }, { id: 8, name: 'Icy Blue' },
+    { id: 9, name: 'Teal / Dark Water' }, { id: 10, name: 'Aquamarine / Light Water' },
+    { id: 11, name: 'Saturated Green' }, { id: 12, name: 'Dark Green' }, { id: 13, name: 'Moss Green' },
+    { id: 14, name: 'Bright Green' }, { id: 15, name: 'Olive Green' }, { id: 16, name: 'Dark Olive Green' },
+    { id: 17, name: 'Bright Yellow' }, { id: 18, name: 'Yellow' }, { id: 19, name: 'Dark Yellow' },
+    { id: 20, name: 'Light Orange' }, { id: 21, name: 'Dark Orange' }, { id: 22, name: 'Light Brown' },
+    { id: 23, name: 'Saturated Brown' }, { id: 24, name: 'Dark Brown' }, { id: 25, name: 'Salmon Pink' },
+    { id: 26, name: 'Bordeaux Red' }, { id: 27, name: 'Saturated Red' }, { id: 28, name: 'Bright Red' },
+    { id: 29, name: 'Dark Pink' }, { id: 30, name: 'Bright Pink' }, { id: 31, name: 'Light Pink' }
 ];
 var COLOR_NAMES = OPENRCT2_COLORS.map(function(c) { return c.id + ': ' + c.name; });
 
@@ -103,7 +82,20 @@ var DEFAULT_SLOTS = [
     { name: 'Slot 6: Custom 6', main: 1, add: 2, sup: 0 }
 ];
 
+var DEFAULT_ALT_SCHEMES = [
+    { main: 7, add: 5, sup: 0 },   // Alt 1
+    { main: 0, add: 7, sup: 0 },   // Alt 2
+    { main: 2, add: 5, sup: 1 }    // Alt 3
+];
+
+var AUTO_ALT_MODES = [
+    'Invert (트랙/레일 반전 색상)',
+    'Dark Tunnel (다크/터널/지하 테마)',
+    'Harmony (보색/조화로운 색상)'
+];
+
 var styleStore = Ct(o({
+    activeTab: 0, // 0 = Main Theme, 1 = Alt Schemes
     activePresetId: 'cyber_neon',
     rides: [],
     targetRideIndex: 0,
@@ -114,6 +106,12 @@ var styleStore = Ct(o({
     customMain: 28,
     customAdd: 18,
     customSup: 0,
+    // Alt Presets Settings
+    useAltPresets: !1,
+    autoAltMode: 0,
+    useCustomAlt: !1,
+    selectedAltIndex: 0, // 0 = Alt 1, 1 = Alt 2, 2 = Alt 3
+    customAltSchemes: DEFAULT_ALT_SCHEMES,
     // Park-Wide Batch Settings
     globalTrack: !0,
     globalVehicle: !0,
@@ -130,6 +128,7 @@ function updateStyleState(patch) {
     try {
         if (typeof context !== 'undefined' && context.getParkStorage) {
             context.getParkStorage().set(STYLE_NS, {
+                activeTab: updated.activeTab,
                 activePresetId: updated.activePresetId,
                 targetRideIndex: updated.targetRideIndex,
                 useCustomPalette: updated.useCustomPalette,
@@ -138,6 +137,11 @@ function updateStyleState(patch) {
                 customMain: updated.customMain,
                 customAdd: updated.customAdd,
                 customSup: updated.customSup,
+                useAltPresets: updated.useAltPresets,
+                autoAltMode: updated.autoAltMode,
+                useCustomAlt: updated.useCustomAlt,
+                selectedAltIndex: updated.selectedAltIndex,
+                customAltSchemes: updated.customAltSchemes,
                 globalTrack: updated.globalTrack,
                 globalVehicle: updated.globalVehicle,
                 globalStation: updated.globalStation,
@@ -185,7 +189,59 @@ function getActivePalette() {
     }
 }
 
+// Calculate Alt Schemes (Returns array of 3 objects for Alt 1, 2, 3)
+function getResolvedAltSchemes(mainPalette) {
+    var st = styleStore.get();
+    if (!st.useAltPresets) {
+        // Unchecked: Sync all 3 alt schemes with main palette!
+        return [
+            { main: mainPalette.track.main, add: mainPalette.track.add, sup: mainPalette.track.sup },
+            { main: mainPalette.track.main, add: mainPalette.track.add, sup: mainPalette.track.sup },
+            { main: mainPalette.track.main, add: mainPalette.track.add, sup: mainPalette.track.sup }
+        ];
+    }
+
+    if (st.useCustomAlt) {
+        // Custom Alt Palette
+        var alts = st.customAltSchemes || DEFAULT_ALT_SCHEMES;
+        return [
+            alts[0] || { main: 7, add: 5, sup: 0 },
+            alts[1] || { main: 0, add: 7, sup: 0 },
+            alts[2] || { main: 2, add: 5, sup: 1 }
+        ];
+    }
+
+    // Auto Mode: 0 = Invert, 1 = Dark Tunnel, 2 = Harmony
+    var m = mainPalette.track.main;
+    var a = mainPalette.track.add;
+    var s = mainPalette.track.sup;
+
+    if (st.autoAltMode === 0) {
+        // Invert
+        return [
+            { main: a, add: m, sup: s }, // Alt 1: Swap main & add
+            { main: s, add: a, sup: m }, // Alt 2: Swap main & sup
+            { main: a, add: s, sup: m }  // Alt 3: Contrast
+        ];
+    } else if (st.autoAltMode === 1) {
+        // Dark Tunnel / Stealth
+        return [
+            { main: 0, add: m, sup: 0 }, // Alt 1: Pure black with main accents
+            { main: 1, add: 0, sup: 1 }, // Alt 2: Industrial grey & black
+            { main: 0, add: a, sup: 1 }  // Alt 3: Black with sub accents
+        ];
+    } else {
+        // Harmony / Colour Shift
+        return [
+            { main: (m + 6) % 32, add: (a + 6) % 32, sup: s },
+            { main: (m + 12) % 32, add: (a + 12) % 32, sup: s },
+            { main: (m + 18) % 32, add: (a + 18) % 32, sup: 0 }
+        ];
+    }
+}
+
 function applyTrackColours(ride, palette) {
+    // 1. Apply Main Colour Scheme (index 0)
     context.executeAction('ridesetappearance', {
         ride: ride.id,
         type: 0,
@@ -204,6 +260,31 @@ function applyTrackColours(ride, palette) {
         value: palette.track.sup,
         index: 0
     }, function() {});
+
+    // 2. Apply Alt Schemes (indices 1, 2, 3)
+    var altSchemes = getResolvedAltSchemes(palette);
+    for (var altIdx = 0; altIdx < 3; altIdx++) {
+        var alt = altSchemes[altIdx];
+        var schemeNum = altIdx + 1; // 1, 2, 3
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 0,
+            value: alt.main,
+            index: schemeNum
+        }, function() {});
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 1,
+            value: alt.add,
+            index: schemeNum
+        }, function() {});
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 2,
+            value: alt.sup,
+            index: schemeNum
+        }, function() {});
+    }
 }
 
 function applyVehicleColours(ride, palette) {
@@ -342,12 +423,22 @@ function saveCurrentToSlot() {
     } catch (e) {}
 }
 
+function updateCustomAltColor(key, val) {
+    var st = styleStore.get();
+    var alts = (st.customAltSchemes || DEFAULT_ALT_SCHEMES).slice();
+    var idx = st.selectedAltIndex || 0;
+    var cur = o({}, alts[idx] || { main: 0, add: 0, sup: 0 });
+    cur[key] = val;
+    alts[idx] = cur;
+    updateStyleState({ customAltSchemes: alts });
+}
+
 var styleWindow = (function(wConfig) {
     return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 300, min: 300, max: 300 },
-    height: { value: 510, min: 510, max: 510 },
+    height: { value: 485, min: 485, max: 485 },
     onOpen: function() {
         var rList = getRides();
         var curIdx = styleStore.get().targetRideIndex;
@@ -358,8 +449,28 @@ var styleWindow = (function(wConfig) {
         });
     },
     content: [
+        // Top Tab Switcher
+        ht({
+            content: [
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎨 Main Theme',
+                    width: '50%',
+                    isPressed: Mt(styleStore, function(st) { return st.activeTab === 0; }),
+                    onClick: function() { updateStyleState({ activeTab: 0 }); }
+                }),
+                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                    text: '🎢 Alt Schemes',
+                    width: '50%',
+                    isPressed: Mt(styleStore, function(st) { return st.activeTab === 1; }),
+                    onClick: function() { updateStyleState({ activeTab: 1 }); }
+                })
+            ]
+        }),
+
+        // ================= TAB 1: MAIN THEME =================
         kt({
             text: 'Style Presets',
+            visibility: Mt(styleStore, function(st) { return st.activeTab === 0 ? 'visible' : 'none'; }),
             content: ft({
                 content: [
                     Gt({ text: 'Preset Palette:' }),
@@ -461,6 +572,7 @@ var styleWindow = (function(wConfig) {
         }),
         kt({
             text: 'Park-Wide Batch Styling',
+            visibility: Mt(styleStore, function(st) { return st.activeTab === 0 ? 'visible' : 'none'; }),
             content: ft({
                 content: [
                     (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
@@ -493,6 +605,7 @@ var styleWindow = (function(wConfig) {
         }),
         kt({
             text: 'Individual Ride Styling',
+            visibility: Mt(styleStore, function(st) { return st.activeTab === 0 ? 'visible' : 'none'; }),
             content: ft({
                 content: [
                     (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
@@ -523,6 +636,120 @@ var styleWindow = (function(wConfig) {
                         text: 'Apply to Selected Ride',
                         height: '26px',
                         onClick: executeApplySingleRide
+                    })
+                ]
+            })
+        }),
+
+        // ================= TAB 2: ALT SCHEMES =================
+        kt({
+            text: 'Alternative Colour Schemes (Alt Presets)',
+            visibility: Mt(styleStore, function(st) { return st.activeTab === 1 ? 'visible' : 'none'; }),
+            content: ft({
+                content: [
+                    (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                        text: 'Use Alt Presets (Enable Alternative Schemes)',
+                        isChecked: styleStore.get().useAltPresets,
+                        onChange: function(val) { updateStyleState({ useAltPresets: val }); }
+                    }),
+                    Gt({
+                        text: Mt(styleStore, function(st) {
+                            return st.useAltPresets ? 'Alt Schemes enabled for tracks.' : '(Unchecked: All Alt Schemes 1-3 sync with Main)';
+                        })
+                    }),
+                    Gt({ text: 'Auto Generate Mode (3-Way):' }),
+                    (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                        items: AUTO_ALT_MODES,
+                        selectedIndex: Mt(styleStore, function(st) { return st.autoAltMode; }),
+                        disabled: Mt(styleStore, function(st) { return !st.useAltPresets || !!st.useCustomAlt; }),
+                        onChange: function(idx) { updateStyleState({ autoAltMode: idx }); }
+                    }),
+                    (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                        text: 'Use Custom Alt Palette (Manual Alt 1-3)',
+                        isChecked: styleStore.get().useCustomAlt,
+                        disabled: Mt(styleStore, function(st) { return !st.useAltPresets; }),
+                        onChange: function(val) { updateStyleState({ useCustomAlt: val }); }
+                    }),
+                    Gt({ text: 'Target Alternative Scheme:' }),
+                    (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                        items: ['Alternative Scheme 1', 'Alternative Scheme 2', 'Alternative Scheme 3'],
+                        selectedIndex: Mt(styleStore, function(st) { return st.selectedAltIndex; }),
+                        disabled: Mt(styleStore, function(st) { return !st.useAltPresets || !st.useCustomAlt; }),
+                        onChange: function(idx) { updateStyleState({ selectedAltIndex: idx }); }
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Alt Main (Track):', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) {
+                                    var alts = st.customAltSchemes || DEFAULT_ALT_SCHEMES;
+                                    var cur = alts[st.selectedAltIndex || 0] || alts[0];
+                                    return cur.main;
+                                }),
+                                disabled: Mt(styleStore, function(st) { return !st.useAltPresets || !st.useCustomAlt; }),
+                                onChange: function(val) { updateCustomAltColor('main', val); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Alt Sub (Rails):', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) {
+                                    var alts = st.customAltSchemes || DEFAULT_ALT_SCHEMES;
+                                    var cur = alts[st.selectedAltIndex || 0] || alts[0];
+                                    return cur.add;
+                                }),
+                                disabled: Mt(styleStore, function(st) { return !st.useAltPresets || !st.useCustomAlt; }),
+                                onChange: function(val) { updateCustomAltColor('add', val); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Alt Support:', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) {
+                                    var alts = st.customAltSchemes || DEFAULT_ALT_SCHEMES;
+                                    var cur = alts[st.selectedAltIndex || 0] || alts[0];
+                                    return cur.sup;
+                                }),
+                                disabled: Mt(styleStore, function(st) { return !st.useAltPresets || !st.useCustomAlt; }),
+                                onChange: function(val) { updateCustomAltColor('sup', val); }
+                            })
+                        ]
+                    })
+                ]
+            })
+        }),
+        kt({
+            text: 'Apply Alt Schemes to Rides',
+            visibility: Mt(styleStore, function(st) { return st.activeTab === 1 ? 'visible' : 'none'; }),
+            content: ft({
+                content: [
+                    (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                        items: Mt(styleStore, function(st) {
+                            var rList = (st.rides && st.rides.length > 0) ? st.rides : getRides();
+                            return rList.map(function(r) { return r.name; });
+                        }),
+                        selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
+                        onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply Alt Schemes to Selected Ride',
+                        height: '26px',
+                        onClick: executeApplySingleRide
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply Alt Schemes to Entire Park',
+                        height: '26px',
+                        onClick: executeApplyParkWide
                     })
                 ]
             })
