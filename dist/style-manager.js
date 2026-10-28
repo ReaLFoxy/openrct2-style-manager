@@ -39,6 +39,43 @@ var OPENRCT2_COLORS = [
 
 var COLOR_NAMES = OPENRCT2_COLORS.map(function(c) { return c.name; });
 
+// Intelligent Bright & Dark Harmony LUTs
+var BRIGHT_LUT = [
+    2, 2, 2,       // 0: Black->White, 1: Grey->White, 2: White->White
+    5, 22, 22,     // 3: Dark Purple->Bright, 4: Light->Lavender, 5: Bright->Lavender
+    7, 8, 8,       // 6: Dark Blue->Light Blue, 7: Light->Icy, 8: Icy->Icy
+    10, 10,        // 9: Teal->Aquamarine, 10: Aquamarine
+    28, 11, 11, 28,// 11: Intense Green->Pastel, 12: Dark->Intense, 13: Moss->Intense, 14: Olive->Pastel
+    25, 24,        // 15: Amber->Yellow, 16: Light Orange->Peach
+    29, 17,        // 17: Bright Red->Coral, 18: Dark Red->Bright Red
+    30, 19, 20,    // 19: Bright Pink->Light Coral, 20: Deep->Bright, 21: Dark->Deep
+    22, 29, 24,    // 22: Lavender, 23: Burgundy->Coral, 24: Peach
+    25, 28, 25,    // 25: Yellow, 26: Olive->Pastel Green, 27: Bronze->Yellow
+    28, 30, 30, 8  // 28: Pastel Green, 29: Coral->Light Coral, 30: Light Coral, 31: Indigo->Icy Blue
+];
+
+var DARK_LUT = [
+    0, 0, 1,       // 0: Black, 1: Grey->Black, 2: White->Grey
+    3, 3, 3,       // 3..5: Purples -> Dark Purple (3)
+    6, 6, 6,       // 6..8: Blues -> Dark Blue (6)
+    6, 9,          // 9: Teal->Dark Blue, 10: Aquamarine->Teal
+    12, 12, 12, 26,// 11..13: Greens -> Dark Green (12), 14: Olive
+    27, 15,        // 15: Amber->Bronze, 16: Orange->Amber
+    18, 23,        // 17: Bright Red->Dark Red, 18: Dark Red->Burgundy
+    21, 21, 23,    // 19..21: Pinks -> Dark Pink/Burgundy
+    3, 23, 15,     // 22: Lavender->Dark Purple, 23: Burgundy, 24: Peach->Amber
+    27, 26, 0,     // 25: Yellow->Bronze, 26: Olive, 27: Bronze->Black
+    12, 18, 29, 6  // 28: Pastel Green->Dark Green, 29: Coral->Dark Red, 30: Light Coral->Coral, 31: Indigo->Dark Blue
+];
+
+function getBrightColor(c) {
+    return BRIGHT_LUT[c] !== undefined ? BRIGHT_LUT[c] : c;
+}
+
+function getDarkColor(c) {
+    return DARK_LUT[c] !== undefined ? DARK_LUT[c] : c;
+}
+
 var STYLE_PRESETS = [
     {
         id: 'cyber-neon',
@@ -106,9 +143,11 @@ var DEFAULT_SLOTS = [
 ];
 
 var AUTO_ALT_MODES = [
+    'Bright Harmony (Luminous & Pastel Tones)',
+    'Darker Harmony (Deep & Moody Shades)',
     'Invert (Swap Main & Sub Colours)',
     'Dark Tunnel (Stealth & Underground)',
-    'Harmony (Harmonic Colour Shift)'
+    'Colour Shift (Harmonic Hue Rotation)'
 ];
 
 var DEFAULT_ALT_SCHEMES = [
@@ -261,19 +300,45 @@ function getResolvedAltSchemes(mainPalette) {
     var a = mainPalette.track.add;
     var s = mainPalette.track.sup;
 
+    // Mode 0: Bright Harmony
     if (st.autoAltMode === 0) {
+        var bM = getBrightColor(m);
+        var bA = getBrightColor(a);
+        var bS = (s === 0) ? 1 : getBrightColor(s);
+        return [
+            { main: bM, add: bA, sup: bS },   // Alt 1: Vibrant brightened tone
+            { main: bM, add: 2, sup: 2 },     // Alt 2: Bright spine with crisp White rails & supports
+            { main: bA, add: bM, sup: 1 }     // Alt 3: Inverted bright accents on Light Grey supports
+        ];
+    }
+    // Mode 1: Darker Harmony
+    else if (st.autoAltMode === 1) {
+        var dM = getDarkColor(m);
+        var dA = getDarkColor(a);
+        return [
+            { main: dM, add: dA, sup: 0 },   // Alt 1: Rich deep tones with Black supports
+            { main: dM, add: 0, sup: 0 },    // Alt 2: Deep spine with Black rails & Black supports
+            { main: 0, add: dM, sup: 0 }     // Alt 3: Obsidian Noir with glowing dark accents
+        ];
+    }
+    // Mode 2: Invert
+    else if (st.autoAltMode === 2) {
         return [
             { main: a, add: m, sup: s },
             { main: s, add: a, sup: m },
             { main: a, add: s, sup: m }
         ];
-    } else if (st.autoAltMode === 1) {
+    }
+    // Mode 3: Dark Tunnel
+    else if (st.autoAltMode === 3) {
         return [
             { main: 0, add: m, sup: 0 },
             { main: 1, add: 0, sup: 1 },
             { main: 0, add: a, sup: 1 }
         ];
-    } else {
+    }
+    // Mode 4: Colour Shift (Hue Rotation)
+    else {
         return [
             { main: (m + 6) % 32, add: (a + 6) % 32, sup: s },
             { main: (m + 12) % 32, add: (a + 12) % 32, sup: s },
