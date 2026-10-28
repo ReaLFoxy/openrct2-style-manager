@@ -2,38 +2,38 @@ import { store, type WritableStore } from 'openrct2-flexui'
 
 const STYLE_STATE_NAMESPACE = 'styleManager.values'
 
-export interface StylePreset {
-	id: string
-	name: string
-	description?: string
-	trackColourMain?: number
-	trackColourAdditional?: number
-	trackColourSupports?: number
-	vehicleColourBody?: number
-	vehicleColourTrim?: number
-	vehicleColourTertiary?: number
-}
-
 export interface StyleManagerState {
-	selectedTab: number
-	activePreset: string
+	activePresetId: string
 	targetRideIndex: number
-	autoApplyNewRides: boolean
+	applyTrack: boolean
+	applyVehicle: boolean
+	applyStation: boolean
+	applyGuests: boolean
+	targetAllRides: boolean
 }
 
 export const styleStore: WritableStore<StyleManagerState> = store({
-	selectedTab: 0,
-	activePreset: 'default',
+	activePresetId: 'cyber_neon',
 	targetRideIndex: 0,
-	autoApplyNewRides: false,
+	applyTrack: true,
+	applyVehicle: true,
+	applyStation: false,
+	applyGuests: true,
+	targetAllRides: false,
 	...context.getParkStorage().get<Partial<StyleManagerState>>(STYLE_STATE_NAMESPACE),
 })
 
-export function setAndPersistStyleState(newData: Partial<StyleManagerState>) {
-	const updated = {
-		...styleStore.get(),
-		...newData,
-	}
+export function setAndPersistStyleState(patch: Partial<StyleManagerState>) {
+	const current = styleStore.get()
+	const updated = { ...current, ...patch }
 	styleStore.set(updated)
-	context.getParkStorage().set(STYLE_STATE_NAMESPACE, updated)
+	context.getParkStorage().set(STYLE_STATE_NAMESPACE, {
+		activePresetId: updated.activePresetId,
+		targetRideIndex: updated.targetRideIndex,
+		applyTrack: updated.applyTrack,
+		applyVehicle: updated.applyVehicle,
+		applyStation: updated.applyStation,
+		applyGuests: updated.applyGuests,
+		targetAllRides: updated.targetAllRides,
+	})
 }

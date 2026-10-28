@@ -15,11 +15,24 @@ A comprehensive theme, color scheme, and aesthetic management plugin for [OpenRC
 
 Style Manager is designed to help park builders effortlessly manage, apply, and coordinate color palettes and aesthetic styles across attractions in OpenRCT2. Instead of manually adjusting color pickers for every single ride track and vehicle, Style Manager provides curated palettes and batch-styling capabilities.
 
-### Current Features (v0.1.0 Beta):
-* **Curated Style Presets**: Built-in color palettes (Classic Crimson, Ocean Breeze, Forest Timber, Cyber Neon).
-* **Target Attraction Selection**: Easily preview and target any built attraction in the park.
-* **Instant Application**: Apply track and vehicle aesthetic color schemes in a single click.
-* **FlexUI Integration**: Clean, responsive in-game UI dockable anywhere in your OpenRCT2 workspace.
+### Features in v0.1.0 Beta:
+* **Curated Style Presets**:
+  * 🟣 **Cyber Neon**: Electric violet track with cyan rails & stealth black supports
+  * 🔴 **Classic Crimson**: Ruby red track with wine ties, white trim & gold accents
+  * 🔵 **Ocean Marine**: Deep navy track with bright aqua rails & crisp white supports
+  * 🟢 **Forest Timber**: Forest green track with moss ties & dark timber supports
+  * 🟠 **Sunset Sunrise**: Radiant dark orange track with sunny yellow rails & coral supports
+  * ⚫ **Monochrome Stealth**: Matte black track with graphite rails & industrial grey supports
+* **Selective Component Toggles**:
+  * `[x] Track colors (3-tier)`: Main, Additional, and Supports
+  * `[x] Vehicle colors (Body/Trim/Tertiary)`: Automatically updates all trains & cars
+  * `[x] Station entrance style`: Synchronize entrance buildings
+  * `[x] Guest accessories`: Bulk-style guest T-shirts, hats, balloons, and shop merchandise
+* **Target Scope**:
+  * Style a **single selected ride** or apply to **ALL rides in the park** in a single click
+* **Graceful Degradation**:
+  * Automatically adapts to attractions and vehicles supporting 3 colors, 2 colors, or 1 color without visual artifacts or crashes
+* **FlexUI Modern Interface**: Clean, responsive, dockable in-game window
 
 ---
 
