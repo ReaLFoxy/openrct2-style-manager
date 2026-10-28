@@ -106,9 +106,9 @@ var DEFAULT_SLOTS = [
 ];
 
 var AUTO_ALT_MODES = [
-    'Invert (반전: Main <-> Sub 스왑)',
-    'Dark Tunnel (다크: 터널/지하 특화)',
-    'Harmony (하모니: 색상환 조화 변조)'
+    'Invert (Swap Main & Sub Colours)',
+    'Dark Tunnel (Stealth & Underground)',
+    'Harmony (Harmonic Colour Shift)'
 ];
 
 var DEFAULT_ALT_SCHEMES = [
@@ -529,18 +529,21 @@ var mainThemeWindow = (function(wConfig) {
     height: { value: 435, min: 435, max: 435 },
     onOpen: syncRideList,
     content: [
-        // Top Tab Buttons
+        // Top Tab Buttons (Height: 28px)
         ht({
+            height: '28px',
             content: [
                 (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: '🎨 Main Theme',
+                    text: 'Main Theme',
                     width: '50%',
+                    height: '28px',
                     isPressed: true,
                     onClick: function() { switchTab(0); }
                 }),
                 (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: '🎢 Alt Schemes',
+                    text: 'Alt Schemes',
                     width: '50%',
+                    height: '28px',
                     isPressed: false,
                     onClick: function() { switchTab(1); }
                 })
@@ -642,7 +645,7 @@ var mainThemeWindow = (function(wConfig) {
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
                         text: 'Save Current Colors to Slot',
-                        height: '22px',
+                        height: '24px',
                         disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
                         onClick: saveCurrentToSlot
                     })
@@ -689,7 +692,7 @@ var mainThemeWindow = (function(wConfig) {
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
                         text: 'Apply to Entire Park',
-                        height: '24px',
+                        height: '26px',
                         onClick: executeApplyParkWide
                     })
                 ]
@@ -727,7 +730,7 @@ var mainThemeWindow = (function(wConfig) {
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
                         text: 'Apply to Selected Ride',
-                        height: '24px',
+                        height: '26px',
                         onClick: executeApplySingleRide
                     })
                 ]
@@ -742,21 +745,24 @@ var altWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 380, min: 380, max: 380 },
+    height: { value: 345, min: 345, max: 345 },
     onOpen: syncRideList,
     content: [
-        // Top Tab Buttons
+        // Top Tab Buttons (Height: 28px)
         ht({
+            height: '28px',
             content: [
                 (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: '🎨 Main Theme',
+                    text: 'Main Theme',
                     width: '50%',
+                    height: '28px',
                     isPressed: false,
                     onClick: function() { switchTab(0); }
                 }),
                 (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: '🎢 Alt Schemes',
+                    text: 'Alt Schemes',
                     width: '50%',
+                    height: '28px',
                     isPressed: true,
                     onClick: function() { switchTab(1); }
                 })
@@ -875,12 +881,12 @@ var altWindow = (function(wConfig) {
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
                         text: 'Apply Alt Schemes to Selected Ride',
-                        height: '24px',
+                        height: '26px',
                         onClick: executeApplySingleRide
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
                         text: 'Apply Alt Schemes to Entire Park',
-                        height: '24px',
+                        height: '26px',
                         onClick: executeApplyParkWide
                     })
                 ]
