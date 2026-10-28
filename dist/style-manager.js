@@ -487,7 +487,7 @@ var styleWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 575, min: 575, max: 575 },
+    height: { value: 605, min: 605, max: 605 },
     onOpen: function() {
         var rList = getRides();
         var curIdx = styleStore.get().targetRideIndex;
