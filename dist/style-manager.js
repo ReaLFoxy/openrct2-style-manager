@@ -196,11 +196,11 @@ var initialStyleState = {
 
     // RGB Chroma FX State
     enableChroma: false,
-    chromaTarget: 0,    // 0 = Selected Ride Only, 1 = All Park Rides
+    chromaTarget: 1,    // 0 = Selected Ride Only, 1 = All Park Rides (Default to All Park Rides)
     chromaVehicles: true,
     chromaBalloons: true,
     chromaGuests: true,
-    chromaTrack: false, // Default false to prevent lag; fast when toggled
+    chromaTrack: true,  // Enabled by default!
     chromaSpeed: 1,     // 0 = Slow, 1 = Normal, 2 = Fast
 
     rides: []
@@ -610,6 +610,8 @@ function onChromaTick() {
     var selRide = null;
     if (st.targetRideIndex >= 0 && st.targetRideIndex < allRides.length) {
         selRide = allRides[st.targetRideIndex];
+    } else if (allRides.length > 0) {
+        selRide = allRides[0];
     }
 
     // 1. Vehicles (Direct In-Memory Property Assignment - 0% LAG!)
@@ -654,23 +656,53 @@ function onChromaTick() {
         } catch (e) {}
     }
 
-    // 3. Tracks (Staggered or Single Ride to maintain 60 FPS)
+    // 3. Tracks (Rainbow Track Wave)
     if (st.chromaTrack) {
-        if (st.chromaTarget === 0 && selRide) {
-            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cMain, index: 0 }, function() {});
-            context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt1, index: 0 }, function() {});
-            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt1, index: 1 }, function() {});
-            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt2, index: 2 }, function() {});
-            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt3, index: 3 }, function() {});
-        } else if (st.chromaTarget === 1 && allRides.length > 0) {
-            // Stagger 1 ride per trigger cycle so the frame rate never drops!
-            var rToUpdate = allRides[chromaStep % allRides.length];
-            if (rToUpdate) {
-                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cMain, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 1, value: cAlt1, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt1, index: 1 }, function() {});
-                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt2, index: 2 }, function() {});
-                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt3, index: 3 }, function() {});
+        if (st.chromaTarget === 0) {
+            // Selected Ride: Full 4-phase wave on this 1 ride (Spine, Rails, Supports)
+            if (selRide) {
+                // Scheme 0
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cMain, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt1, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt2, index: 0 }, function() {});
+
+                // Schemes 1, 2, 3
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt1, index: 1 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt2, index: 1 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt3, index: 1 }, function() {});
+
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt2, index: 2 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt3, index: 2 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cMain, index: 2 }, function() {});
+
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt3, index: 3 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cMain, index: 3 }, function() {});
+                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt1, index: 3 }, function() {});
+
+                try {
+                    if (selRide.colourSchemes && selRide.colourSchemes.length > 0) {
+                        selRide.colourSchemes[0] = { main: cMain, additional: cAlt1, supports: cAlt2 };
+                    }
+                } catch (e) {}
+            }
+        } else {
+            // All Park Rides: Update all rides smoothly with phased rainbow colors!
+            for (var rIdx = 0; rIdx < allRides.length; rIdx++) {
+                var ride = allRides[rIdx];
+                var rideColorMain = RAINBOW_PALETTE[(chromaStep + rIdx) % 9];
+                var rideColorSub  = RAINBOW_PALETTE[(chromaStep + rIdx + 2) % 9];
+                var rideColorSup  = RAINBOW_PALETTE[(chromaStep + rIdx + 4) % 9];
+
+                // Update Scheme 0 (used by all main track pieces)
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: rideColorMain, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: rideColorSub, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: rideColorSup, index: 0 }, function() {});
+
+                try {
+                    if (ride.colourSchemes && ride.colourSchemes.length > 0) {
+                        ride.colourSchemes[0] = { main: rideColorMain, additional: rideColorSub, supports: rideColorSup };
+                    }
+                } catch (e) {}
             }
         }
     }
