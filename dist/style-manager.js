@@ -62,11 +62,14 @@ var styleStore = Ct(o({
     activePresetId: 'cyber_neon',
     rides: [],
     targetRideIndex: 0,
-    applyTrack: !0,
-    applyVehicle: !0,
-    applyStation: !1,
-    applyGuests: !0,
-    targetAllRides: !1
+    // Park-Wide Batch Settings
+    globalTrack: !0,
+    globalVehicle: !0,
+    globalStation: !1,
+    globalGuests: !0,
+    // Individual Ride Settings
+    singleTrack: !0,
+    singleVehicle: !0
 }, _savedStyle));
 
 function updateStyleState(patch) {
@@ -77,11 +80,12 @@ function updateStyleState(patch) {
             context.getParkStorage().set(STYLE_NS, {
                 activePresetId: updated.activePresetId,
                 targetRideIndex: updated.targetRideIndex,
-                applyTrack: updated.applyTrack,
-                applyVehicle: updated.applyVehicle,
-                applyStation: updated.applyStation,
-                applyGuests: updated.applyGuests,
-                targetAllRides: updated.targetAllRides
+                globalTrack: updated.globalTrack,
+                globalVehicle: updated.globalVehicle,
+                globalStation: updated.globalStation,
+                globalGuests: updated.globalGuests,
+                singleTrack: updated.singleTrack,
+                singleVehicle: updated.singleVehicle
             });
         }
     } catch (e) {}
@@ -96,91 +100,92 @@ function getRides() {
     return [];
 }
 
-function executeApply() {
+function getActivePreset() {
     var st = styleStore.get();
-    var preset = STYLE_PRESETS[0];
     for (var i = 0; i < STYLE_PRESETS.length; i++) {
         if (STYLE_PRESETS[i].id === st.activePresetId) {
-            preset = STYLE_PRESETS[i];
-            break;
+            return STYLE_PRESETS[i];
         }
     }
+    return STYLE_PRESETS[0];
+}
 
-    var allRides = getRides();
-    var targets = st.targetAllRides
-        ? allRides
-        : ((st.targetRideIndex >= 0 && st.targetRideIndex < allRides.length) ? [allRides[st.targetRideIndex]] : (allRides.length > 0 ? [allRides[0]] : []));
+function applyTrackColours(ride, preset) {
+    context.executeAction('ridesetappearance', {
+        ride: ride.id,
+        type: 0,
+        value: preset.track.main,
+        index: 0
+    }, function() {});
+    context.executeAction('ridesetappearance', {
+        ride: ride.id,
+        type: 1,
+        value: preset.track.add,
+        index: 0
+    }, function() {});
+    context.executeAction('ridesetappearance', {
+        ride: ride.id,
+        type: 2,
+        value: preset.track.sup,
+        index: 0
+    }, function() {});
+}
 
+function applyVehicleColours(ride, preset) {
+    var numSchemes = (ride.vehicleColours && ride.vehicleColours.length > 0) ? ride.vehicleColours.length : 1;
+    for (var v = 0; v < numSchemes; v++) {
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 3,
+            value: preset.vehicle.body,
+            index: v
+        }, function() {});
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 4,
+            value: preset.vehicle.trim,
+            index: v
+        }, function() {});
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 5,
+            value: preset.vehicle.tert,
+            index: v
+        }, function() {});
+    }
+}
+
+function applyStationStyle(ride, preset) {
+    context.executeAction('ridesetappearance', {
+        ride: ride.id,
+        type: 7,
+        value: 0,
+        index: 0
+    }, function() {});
+}
+
+// 1. Action: Apply Park-Wide to All Rides & Guests
+function executeApplyParkWide() {
+    var st = styleStore.get();
+    var preset = getActivePreset();
+    var rides = getRides();
     var ridesModified = 0;
     var guestsModified = 0;
 
-    targets.forEach(function(ride) {
+    rides.forEach(function(ride) {
         ridesModified++;
-
-        // 1. Apply Track Colours
-        if (st.applyTrack) {
-            context.executeAction('ridesetappearance', {
-                ride: ride.id,
-                type: 0, // trackColourMain
-                value: preset.track.main,
-                index: 0
-            }, function() {});
-
-            context.executeAction('ridesetappearance', {
-                ride: ride.id,
-                type: 1, // trackColourAdditional
-                value: preset.track.add,
-                index: 0
-            }, function() {});
-
-            context.executeAction('ridesetappearance', {
-                ride: ride.id,
-                type: 2, // trackColourSupports
-                value: preset.track.sup,
-                index: 0
-            }, function() {});
+        if (st.globalTrack) {
+            applyTrackColours(ride, preset);
         }
-
-        // 2. Apply Vehicle Colours
-        if (st.applyVehicle) {
-            var numSchemes = (ride.vehicleColours && ride.vehicleColours.length > 0) ? ride.vehicleColours.length : 1;
-            for (var v = 0; v < numSchemes; v++) {
-                context.executeAction('ridesetappearance', {
-                    ride: ride.id,
-                    type: 3, // vehicleColourBody
-                    value: preset.vehicle.body,
-                    index: v
-                }, function() {});
-
-                context.executeAction('ridesetappearance', {
-                    ride: ride.id,
-                    type: 4, // vehicleColourTrim
-                    value: preset.vehicle.trim,
-                    index: v
-                }, function() {});
-
-                context.executeAction('ridesetappearance', {
-                    ride: ride.id,
-                    type: 5, // vehicleColourTertiary
-                    value: preset.vehicle.tert,
-                    index: v
-                }, function() {});
-            }
+        if (st.globalVehicle) {
+            applyVehicleColours(ride, preset);
         }
-
-        // 3. Apply Station Style
-        if (st.applyStation) {
-            context.executeAction('ridesetappearance', {
-                ride: ride.id,
-                type: 7, // entranceStyle
-                value: 0,
-                index: 0
-            }, function() {});
+        if (st.globalStation) {
+            applyStationStyle(ride, preset);
         }
     });
 
-    // 4. Apply Guest Styles
-    if (st.applyGuests && preset.guest) {
+    if (st.globalGuests && preset.guest) {
         try {
             var guests = map.getAllEntities('guest');
             for (var gIdx = 0; gIdx < guests.length; gIdx++) {
@@ -193,7 +198,6 @@ function executeApply() {
             }
         } catch (e) {}
 
-        // Synchronize Stalls
         try {
             var stalls = map.rides.filter(function(r) { return r.classification === 'stall'; });
             stalls.forEach(function(s) {
@@ -207,15 +211,35 @@ function executeApply() {
         } catch (e) {}
     }
 
-    var msg = st.targetAllRides
-        ? ('Applied \'' + preset.name + '\' to all ' + ridesModified + ' rides & ' + guestsModified + ' guests!')
-        : ('Applied \'' + preset.name + '\' to ' + (targets[0] ? targets[0].name : 'ride') + '!');
+    try {
+        park.postMessage({
+            type: 'attraction',
+            text: 'Applied \'' + preset.name + '\' across park (' + ridesModified + ' rides, ' + guestsModified + ' guests)!',
+            subject: (rides[0] ? rides[0].id : 0)
+        });
+    } catch (e) {}
+}
+
+// 2. Action: Apply to Individual Selected Ride
+function executeApplySingleRide() {
+    var st = styleStore.get();
+    var preset = getActivePreset();
+    var rides = getRides();
+    var ride = (st.targetRideIndex >= 0 && st.targetRideIndex < rides.length) ? rides[st.targetRideIndex] : rides[0];
+    if (!ride) return;
+
+    if (st.singleTrack) {
+        applyTrackColours(ride, preset);
+    }
+    if (st.singleVehicle) {
+        applyVehicleColours(ride, preset);
+    }
 
     try {
         park.postMessage({
             type: 'attraction',
-            text: msg,
-            subject: targets[0] ? targets[0].id : 0
+            text: 'Applied \'' + preset.name + '\' to ' + ride.name + '!',
+            subject: ride.id
         });
     } catch (e) {}
 }
@@ -225,7 +249,7 @@ var styleWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 290, min: 290, max: 290 },
-    height: { value: 330, min: 330, max: 330 },
+    height: { value: 385, min: 385, max: 385 },
     onOpen: function() {
         var rList = getRides();
         var curIdx = styleStore.get().targetRideIndex;
@@ -267,34 +291,39 @@ var styleWindow = (function(wConfig) {
             })
         }),
         kt({
-            text: 'Components to Apply',
+            text: 'Park-Wide Batch Styling',
             content: ft({
                 content: [
                     (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                        text: 'Track colors (3-tier)',
-                        isChecked: styleStore.get().applyTrack,
-                        onChange: function(val) { updateStyleState({ applyTrack: val }); }
+                        text: 'All tracks (3-tier)',
+                        isChecked: styleStore.get().globalTrack,
+                        onChange: function(val) { updateStyleState({ globalTrack: val }); }
                     }),
                     (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                        text: 'Vehicle colors (Body/Trim/Tertiary)',
-                        isChecked: styleStore.get().applyVehicle,
-                        onChange: function(val) { updateStyleState({ applyVehicle: val }); }
+                        text: 'All vehicles (Body/Trim/Tertiary)',
+                        isChecked: styleStore.get().globalVehicle,
+                        onChange: function(val) { updateStyleState({ globalVehicle: val }); }
                     }),
                     (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                        text: 'Station entrance style',
-                        isChecked: styleStore.get().applyStation,
-                        onChange: function(val) { updateStyleState({ applyStation: val }); }
+                        text: 'All station entrance styles',
+                        isChecked: styleStore.get().globalStation,
+                        onChange: function(val) { updateStyleState({ globalStation: val }); }
                     }),
                     (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                        text: 'Guest items (T-shirt/Hat/Balloon)',
-                        isChecked: styleStore.get().applyGuests,
-                        onChange: function(val) { updateStyleState({ applyGuests: val }); }
+                        text: 'All guests & stalls (T-shirt/Hat/Balloon)',
+                        isChecked: styleStore.get().globalGuests,
+                        onChange: function(val) { updateStyleState({ globalGuests: val }); }
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Apply to Entire Park',
+                        height: '26px',
+                        onClick: executeApplyParkWide
                     })
                 ]
             })
         }),
         kt({
-            text: 'Target Scope',
+            text: 'Individual Ride Styling',
             content: ft({
                 content: [
                     (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
@@ -303,18 +332,28 @@ var styleWindow = (function(wConfig) {
                             return rList.map(function(r) { return r.name; });
                         }),
                         selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
-                        disabled: Mt(styleStore, function(st) { return st.targetAllRides; }),
                         onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
                     }),
-                    (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                        text: 'Apply to ALL rides in park',
-                        isChecked: styleStore.get().targetAllRides,
-                        onChange: function(val) { updateStyleState({ targetAllRides: val }); }
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Track Color',
+                                width: '50%',
+                                isChecked: styleStore.get().singleTrack,
+                                onChange: function(val) { updateStyleState({ singleTrack: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Vehicle Color',
+                                width: '50%',
+                                isChecked: styleStore.get().singleVehicle,
+                                onChange: function(val) { updateStyleState({ singleVehicle: val }); }
+                            })
+                        ]
                     }),
                     (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                        text: 'Apply Selected Styles',
-                        height: '28px',
-                        onClick: executeApply
+                        text: 'Apply to Selected Ride',
+                        height: '26px',
+                        onClick: executeApplySingleRide
                     })
                 ]
             })

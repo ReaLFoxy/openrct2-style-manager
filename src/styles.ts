@@ -85,124 +85,64 @@ export const STYLE_PRESETS: StylePreset[] = [
 ]
 
 export function getRides(): Ride[] {
-	return map.rides.filter((r) => r.classification === 'ride')
+	try {
+		if (typeof map !== 'undefined' && map.rides) {
+			return map.rides.filter((r) => r.classification === 'ride')
+		}
+	} catch (e) {}
+	return []
 }
 
-export interface ApplyOptions {
-	preset: StylePreset
-	applyTrack: boolean
-	applyVehicle: boolean
-	applyStation: boolean
-	applyGuests: boolean
-	targetAllRides: boolean
-	targetRideIndex: number
+export function applyTrackColours(ride: Ride, preset: StylePreset): void {
+	context.executeAction('ridesetappearance', {
+		ride: ride.id,
+		type: 0,
+		value: preset.track.main,
+		index: 0,
+	}, () => {})
+	context.executeAction('ridesetappearance', {
+		ride: ride.id,
+		type: 1,
+		value: preset.track.additional,
+		index: 0,
+	}, () => {})
+	context.executeAction('ridesetappearance', {
+		ride: ride.id,
+		type: 2,
+		value: preset.track.supports,
+		index: 0,
+	}, () => {})
 }
 
-export function executeApplyStyle(options: ApplyOptions): { ridesModified: number; guestsModified: number } {
-	const { preset, applyTrack, applyVehicle, applyStation, applyGuests, targetAllRides, targetRideIndex } = options
-	const rides = getRides()
-	const targets: Ride[] = targetAllRides ? rides : (targetRideIndex >= 0 && targetRideIndex < rides.length ? [rides[targetRideIndex]] : (rides.length > 0 ? [rides[0]] : []))
-
-	let ridesModified = 0
-	let guestsModified = 0
-
-	targets.forEach((ride) => {
-		ridesModified++
-
-		// 1. Apply Track Colours
-		if (applyTrack) {
-			context.executeAction('ridesetappearance', {
-				ride: ride.id,
-				type: 0, // trackColourMain
-				value: preset.track.main,
-				index: 0,
-			}, () => {})
-
-			context.executeAction('ridesetappearance', {
-				ride: ride.id,
-				type: 1, // trackColourAdditional
-				value: preset.track.additional,
-				index: 0,
-			}, () => {})
-
-			context.executeAction('ridesetappearance', {
-				ride: ride.id,
-				type: 2, // trackColourSupports
-				value: preset.track.supports,
-				index: 0,
-			}, () => {})
-		}
-
-		// 2. Apply Vehicle Colours
-		if (applyVehicle) {
-			const numSchemes = ride.vehicleColours ? Math.max(1, ride.vehicleColours.length) : 1
-			for (let i = 0; i < numSchemes; i++) {
-				context.executeAction('ridesetappearance', {
-					ride: ride.id,
-					type: 3, // vehicleColourBody
-					value: preset.vehicle.body,
-					index: i,
-				}, () => {})
-
-				context.executeAction('ridesetappearance', {
-					ride: ride.id,
-					type: 4, // vehicleColourTrim
-					value: preset.vehicle.trim,
-					index: i,
-				}, () => {})
-
-				context.executeAction('ridesetappearance', {
-					ride: ride.id,
-					type: 5, // vehicleColourTertiary
-					value: preset.vehicle.tertiary,
-					index: i,
-				}, () => {})
-			}
-		}
-
-		// 3. Apply Station Style
-		if (applyStation && preset.stationStyle !== undefined) {
-			context.executeAction('ridesetappearance', {
-				ride: ride.id,
-				type: 7, // entranceStyle
-				value: preset.stationStyle,
-				index: 0,
-			}, () => {})
-		}
-	})
-
-	// 4. Apply Guest Styles
-	if (applyGuests && preset.guest) {
-		const guests = map.getAllEntities('guest')
-		guests.forEach((guest) => {
-			guestsModified++
-			guest.tshirtColour = preset.guest.tshirt
-			guest.hatColour = preset.guest.hat
-			guest.balloonColour = preset.guest.balloon
-			guest.umbrellaColour = preset.guest.umbrella
-		})
-
-		// Also update merchandise stalls (Hat, Balloon, T-shirt)
-		const stalls = map.rides.filter((r) => r.classification === 'stall')
-		stalls.forEach((stall) => {
-			context.executeAction('ridesetappearance', {
-				ride: stall.id,
-				type: 0,
-				value: preset.guest.tshirt,
-				index: 0,
-			}, () => {})
-		})
+export function applyVehicleColours(ride: Ride, preset: StylePreset): void {
+	const numSchemes = ride.vehicleColours && ride.vehicleColours.length > 0 ? ride.vehicleColours.length : 1
+	for (let v = 0; v < numSchemes; v++) {
+		context.executeAction('ridesetappearance', {
+			ride: ride.id,
+			type: 3,
+			value: preset.vehicle.body,
+			index: v,
+		}, () => {})
+		context.executeAction('ridesetappearance', {
+			ride: ride.id,
+			type: 4,
+			value: preset.vehicle.trim,
+			index: v,
+		}, () => {})
+		context.executeAction('ridesetappearance', {
+			ride: ride.id,
+			type: 5,
+			value: preset.vehicle.tertiary,
+			index: v,
+		}, () => {})
 	}
+}
 
-	const notifText = targetAllRides
-		? `Applied '${preset.name}' to all ${ridesModified} rides & ${guestsModified} guests!`
-		: `Applied '${preset.name}' to ${targets[0]?.name ?? 'ride'}!`
-
-	park.postMessage({
-		type: 'attraction',
-		text: notifText,
-		subject: targets[0]?.id ?? 0,
-	})
-
-	return { ridesModified, guestsModified }
+export function applyStationStyle(ride: Ride, preset: StylePreset): void {
+	context.executeAction('ridesetappearance', {
+		ride: ride.id,
+		type: 7,
+		value: 0,
+		index: 0,
+	}, () => {})
 }
