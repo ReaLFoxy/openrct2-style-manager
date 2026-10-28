@@ -7,6 +7,42 @@ try {
     }
 } catch (e) {}
 
+var OPENRCT2_COLORS = [
+    { id: 0, name: 'Black' },
+    { id: 1, name: 'Grey' },
+    { id: 2, name: 'White' },
+    { id: 3, name: 'Dark Purple' },
+    { id: 4, name: 'Light Purple' },
+    { id: 5, name: 'Bright Purple' },
+    { id: 6, name: 'Dark Blue' },
+    { id: 7, name: 'Light Blue' },
+    { id: 8, name: 'Icy Blue' },
+    { id: 9, name: 'Teal / Dark Water' },
+    { id: 10, name: 'Aquamarine / Light Water' },
+    { id: 11, name: 'Saturated Green' },
+    { id: 12, name: 'Dark Green' },
+    { id: 13, name: 'Moss Green' },
+    { id: 14, name: 'Bright Green' },
+    { id: 15, name: 'Olive Green' },
+    { id: 16, name: 'Dark Olive Green' },
+    { id: 17, name: 'Bright Yellow' },
+    { id: 18, name: 'Yellow' },
+    { id: 19, name: 'Dark Yellow' },
+    { id: 20, name: 'Light Orange' },
+    { id: 21, name: 'Dark Orange' },
+    { id: 22, name: 'Light Brown' },
+    { id: 23, name: 'Saturated Brown' },
+    { id: 24, name: 'Dark Brown' },
+    { id: 25, name: 'Salmon Pink' },
+    { id: 26, name: 'Bordeaux Red' },
+    { id: 27, name: 'Saturated Red' },
+    { id: 28, name: 'Bright Red' },
+    { id: 29, name: 'Dark Pink' },
+    { id: 30, name: 'Bright Pink' },
+    { id: 31, name: 'Light Pink' }
+];
+var COLOR_NAMES = OPENRCT2_COLORS.map(function(c) { return c.id + ': ' + c.name; });
+
 var STYLE_PRESETS = [
     {
         id: 'cyber_neon',
@@ -58,10 +94,26 @@ var STYLE_PRESETS = [
     }
 ];
 
+var DEFAULT_SLOTS = [
+    { name: 'Slot 1: Crimson Flame', main: 28, add: 18, sup: 0 },
+    { name: 'Slot 2: Ocean Deep', main: 6, add: 8, sup: 2 },
+    { name: 'Slot 3: Forest Emerald', main: 12, add: 14, sup: 24 },
+    { name: 'Slot 4: Electric Night', main: 5, add: 7, sup: 1 },
+    { name: 'Slot 5: Desert Sunset', main: 21, add: 19, sup: 27 },
+    { name: 'Slot 6: Custom 6', main: 1, add: 2, sup: 0 }
+];
+
 var styleStore = Ct(o({
     activePresetId: 'cyber_neon',
     rides: [],
     targetRideIndex: 0,
+    // Custom Palette Mode Settings
+    useCustomPalette: !1,
+    selectedSlotIndex: 0,
+    customSlots: DEFAULT_SLOTS,
+    customMain: 28,
+    customAdd: 18,
+    customSup: 0,
     // Park-Wide Batch Settings
     globalTrack: !0,
     globalVehicle: !0,
@@ -80,6 +132,12 @@ function updateStyleState(patch) {
             context.getParkStorage().set(STYLE_NS, {
                 activePresetId: updated.activePresetId,
                 targetRideIndex: updated.targetRideIndex,
+                useCustomPalette: updated.useCustomPalette,
+                selectedSlotIndex: updated.selectedSlotIndex,
+                customSlots: updated.customSlots,
+                customMain: updated.customMain,
+                customAdd: updated.customAdd,
+                customSup: updated.customSup,
                 globalTrack: updated.globalTrack,
                 globalVehicle: updated.globalVehicle,
                 globalStation: updated.globalStation,
@@ -110,64 +168,80 @@ function getActivePreset() {
     return STYLE_PRESETS[0];
 }
 
-function applyTrackColours(ride, preset) {
+function getActivePalette() {
+    var st = styleStore.get();
+    if (st.useCustomPalette) {
+        var mainName = (OPENRCT2_COLORS[st.customMain] || OPENRCT2_COLORS[0]).name;
+        var addName = (OPENRCT2_COLORS[st.customAdd] || OPENRCT2_COLORS[0]).name;
+        return {
+            name: 'Custom (' + mainName + ' / ' + addName + ')',
+            track: { main: st.customMain, add: st.customAdd, sup: st.customSup },
+            vehicle: { body: st.customMain, trim: st.customAdd, tert: st.customSup },
+            guest: { tshirt: st.customMain, hat: st.customAdd, balloon: st.customMain, umbrella: st.customAdd },
+            stationStyle: 0
+        };
+    } else {
+        return getActivePreset();
+    }
+}
+
+function applyTrackColours(ride, palette) {
     context.executeAction('ridesetappearance', {
         ride: ride.id,
         type: 0,
-        value: preset.track.main,
+        value: palette.track.main,
         index: 0
     }, function() {});
     context.executeAction('ridesetappearance', {
         ride: ride.id,
         type: 1,
-        value: preset.track.add,
+        value: palette.track.add,
         index: 0
     }, function() {});
     context.executeAction('ridesetappearance', {
         ride: ride.id,
         type: 2,
-        value: preset.track.sup,
+        value: palette.track.sup,
         index: 0
     }, function() {});
 }
 
-function applyVehicleColours(ride, preset) {
+function applyVehicleColours(ride, palette) {
     var numSchemes = (ride.vehicleColours && ride.vehicleColours.length > 0) ? ride.vehicleColours.length : 1;
     for (var v = 0; v < numSchemes; v++) {
         context.executeAction('ridesetappearance', {
             ride: ride.id,
             type: 3,
-            value: preset.vehicle.body,
+            value: palette.vehicle.body,
             index: v
         }, function() {});
         context.executeAction('ridesetappearance', {
             ride: ride.id,
             type: 4,
-            value: preset.vehicle.trim,
+            value: palette.vehicle.trim,
             index: v
         }, function() {});
         context.executeAction('ridesetappearance', {
             ride: ride.id,
             type: 5,
-            value: preset.vehicle.tert,
+            value: palette.vehicle.tert,
             index: v
         }, function() {});
     }
 }
 
-function applyStationStyle(ride, preset) {
+function applyStationStyle(ride, palette) {
     context.executeAction('ridesetappearance', {
         ride: ride.id,
         type: 7,
-        value: 0,
+        value: palette.stationStyle || 0,
         index: 0
     }, function() {});
 }
 
-// 1. Action: Apply Park-Wide to All Rides & Guests
 function executeApplyParkWide() {
     var st = styleStore.get();
-    var preset = getActivePreset();
+    var palette = getActivePalette();
     var rides = getRides();
     var ridesModified = 0;
     var guestsModified = 0;
@@ -175,26 +249,26 @@ function executeApplyParkWide() {
     rides.forEach(function(ride) {
         ridesModified++;
         if (st.globalTrack) {
-            applyTrackColours(ride, preset);
+            applyTrackColours(ride, palette);
         }
         if (st.globalVehicle) {
-            applyVehicleColours(ride, preset);
+            applyVehicleColours(ride, palette);
         }
         if (st.globalStation) {
-            applyStationStyle(ride, preset);
+            applyStationStyle(ride, palette);
         }
     });
 
-    if (st.globalGuests && preset.guest) {
+    if (st.globalGuests && palette.guest) {
         try {
             var guests = map.getAllEntities('guest');
             for (var gIdx = 0; gIdx < guests.length; gIdx++) {
                 var g = guests[gIdx];
                 guestsModified++;
-                g.tshirtColour = preset.guest.tshirt;
-                g.hatColour = preset.guest.hat;
-                g.balloonColour = preset.guest.balloon;
-                g.umbrellaColour = preset.guest.umbrella;
+                g.tshirtColour = palette.guest.tshirt;
+                g.hatColour = palette.guest.hat;
+                g.balloonColour = palette.guest.balloon;
+                g.umbrellaColour = palette.guest.umbrella;
             }
         } catch (e) {}
 
@@ -204,7 +278,7 @@ function executeApplyParkWide() {
                 context.executeAction('ridesetappearance', {
                     ride: s.id,
                     type: 0,
-                    value: preset.guest.tshirt,
+                    value: palette.guest.tshirt,
                     index: 0
                 }, function() {});
             });
@@ -214,32 +288,56 @@ function executeApplyParkWide() {
     try {
         park.postMessage({
             type: 'attraction',
-            text: 'Applied \'' + preset.name + '\' across park (' + ridesModified + ' rides, ' + guestsModified + ' guests)!',
+            text: 'Applied \'' + palette.name + '\' across park (' + ridesModified + ' rides, ' + guestsModified + ' guests)!',
             subject: (rides[0] ? rides[0].id : 0)
         });
     } catch (e) {}
 }
 
-// 2. Action: Apply to Individual Selected Ride
 function executeApplySingleRide() {
     var st = styleStore.get();
-    var preset = getActivePreset();
+    var palette = getActivePalette();
     var rides = getRides();
     var ride = (st.targetRideIndex >= 0 && st.targetRideIndex < rides.length) ? rides[st.targetRideIndex] : rides[0];
     if (!ride) return;
 
     if (st.singleTrack) {
-        applyTrackColours(ride, preset);
+        applyTrackColours(ride, palette);
     }
     if (st.singleVehicle) {
-        applyVehicleColours(ride, preset);
+        applyVehicleColours(ride, palette);
     }
 
     try {
         park.postMessage({
             type: 'attraction',
-            text: 'Applied \'' + preset.name + '\' to ' + ride.name + '!',
+            text: 'Applied \'' + palette.name + '\' to ' + ride.name + '!',
             subject: ride.id
+        });
+    } catch (e) {}
+}
+
+function saveCurrentToSlot() {
+    var st = styleStore.get();
+    var slots = (st.customSlots || DEFAULT_SLOTS).slice();
+    var idx = (st.selectedSlotIndex >= 0 && st.selectedSlotIndex < slots.length) ? st.selectedSlotIndex : 0;
+    var mainName = (OPENRCT2_COLORS[st.customMain] || OPENRCT2_COLORS[0]).name;
+    var addName = (OPENRCT2_COLORS[st.customAdd] || OPENRCT2_COLORS[0]).name;
+
+    slots[idx] = {
+        name: 'Slot ' + (idx + 1) + ': ' + mainName + ' / ' + addName,
+        main: st.customMain,
+        add: st.customAdd,
+        sup: st.customSup
+    };
+
+    updateStyleState({ customSlots: slots });
+
+    try {
+        park.postMessage({
+            type: 'attraction',
+            text: 'Saved custom palette to Slot ' + (idx + 1) + ' (' + mainName + ' / ' + addName + ')!',
+            subject: 0
         });
     } catch (e) {}
 }
@@ -248,8 +346,8 @@ var styleWindow = (function(wConfig) {
     return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
 })({
     title: 'Style Manager (v0.1.0-beta)',
-    width: { value: 290, min: 290, max: 290 },
-    height: { value: 385, min: 385, max: 385 },
+    width: { value: 300, min: 300, max: 300 },
+    height: { value: 510, min: 510, max: 510 },
     onOpen: function() {
         var rList = getRides();
         var curIdx = styleStore.get().targetRideIndex;
@@ -273,6 +371,7 @@ var styleWindow = (function(wConfig) {
                             }
                             return 0;
                         }),
+                        disabled: Mt(styleStore, function(st) { return !!st.useCustomPalette; }),
                         onChange: function(idx) {
                             if (idx >= 0 && idx < STYLE_PRESETS.length) {
                                 updateStyleState({ activePresetId: STYLE_PRESETS[idx].id });
@@ -281,11 +380,81 @@ var styleWindow = (function(wConfig) {
                     }),
                     Gt({
                         text: Mt(styleStore, function(st) {
+                            if (st.useCustomPalette) return '(Custom Palette Active)';
                             for (var idx = 0; idx < STYLE_PRESETS.length; idx++) {
                                 if (STYLE_PRESETS[idx].id === st.activePresetId) return STYLE_PRESETS[idx].desc;
                             }
                             return '';
                         })
+                    }),
+                    (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                        text: 'Use Custom Palette (3-Color)',
+                        isChecked: styleStore.get().useCustomPalette,
+                        onChange: function(val) { updateStyleState({ useCustomPalette: val }); }
+                    }),
+                    Gt({ text: 'Custom Palette Slot (Max 6):' }),
+                    (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                        items: Mt(styleStore, function(st) {
+                            var slots = st.customSlots || DEFAULT_SLOTS;
+                            return slots.map(function(s) { return s.name; });
+                        }),
+                        selectedIndex: Mt(styleStore, function(st) { return st.selectedSlotIndex; }),
+                        disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
+                        onChange: function(idx) {
+                            var st = styleStore.get();
+                            var slots = st.customSlots || DEFAULT_SLOTS;
+                            if (idx >= 0 && idx < slots.length) {
+                                var s = slots[idx];
+                                updateStyleState({
+                                    selectedSlotIndex: idx,
+                                    customMain: s.main,
+                                    customAdd: s.add,
+                                    customSup: s.sup
+                                });
+                            }
+                        }
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Main (Track/Body):', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.customMain; }),
+                                disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
+                                onChange: function(val) { updateStyleState({ customMain: val }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Sub (Rails/Trim):', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.customAdd; }),
+                                disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
+                                onChange: function(val) { updateStyleState({ customAdd: val }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Support (Pillars):', width: '45%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: COLOR_NAMES,
+                                width: '55%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.customSup; }),
+                                disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
+                                onChange: function(val) { updateStyleState({ customSup: val }); }
+                            })
+                        ]
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Save Current Colors to Slot',
+                        height: '24px',
+                        disabled: Mt(styleStore, function(st) { return !st.useCustomPalette; }),
+                        onClick: saveCurrentToSlot
                     })
                 ]
             })

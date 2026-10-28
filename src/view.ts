@@ -12,6 +12,9 @@ import {
 
 import { setAndPersistStyleState, styleStore } from './state'
 import {
+	COLOR_NAMES,
+	DEFAULT_SLOTS,
+	OPENRCT2_COLORS,
 	STYLE_PRESETS,
 	applyStationStyle,
 	applyTrackColours,
@@ -24,29 +27,52 @@ function getActivePreset() {
 	return STYLE_PRESETS.find((p) => p.id === st.activePresetId) ?? STYLE_PRESETS[0]
 }
 
+function getActivePalette() {
+	const st = styleStore.get()
+	if (st.useCustomPalette) {
+		const mainName = (OPENRCT2_COLORS[st.customMain] || OPENRCT2_COLORS[0]).name
+		const addName = (OPENRCT2_COLORS[st.customAdd] || OPENRCT2_COLORS[0]).name
+		return {
+			name: `Custom (${mainName} / ${addName})`,
+			track: { main: st.customMain, add: st.customAdd, sup: st.customSup },
+			vehicle: { body: st.customMain, trim: st.customAdd, tert: st.customSup },
+			guest: { tshirt: st.customMain, hat: st.customAdd, balloon: st.customMain, umbrella: st.customAdd },
+			stationStyle: 0,
+		}
+	}
+	const p = getActivePreset()
+	return {
+		name: p.name,
+		track: { main: p.track.main, add: p.track.additional, sup: p.track.supports },
+		vehicle: { body: p.vehicle.body, trim: p.vehicle.trim, tert: p.vehicle.tertiary },
+		guest: p.guest,
+		stationStyle: p.stationStyle,
+	}
+}
+
 function executeApplyParkWide() {
 	const st = styleStore.get()
-	const preset = getActivePreset()
+	const palette = getActivePalette()
 	const rides = getRides()
 	let ridesModified = 0
 	let guestsModified = 0
 
 	rides.forEach((ride) => {
 		ridesModified++
-		if (st.globalTrack) applyTrackColours(ride, preset)
-		if (st.globalVehicle) applyVehicleColours(ride, preset)
-		if (st.globalStation) applyStationStyle(ride, preset)
+		if (st.globalTrack) applyTrackColours(ride, palette)
+		if (st.globalVehicle) applyVehicleColours(ride, palette)
+		if (st.globalStation) applyStationStyle(ride, palette)
 	})
 
-	if (st.globalGuests && preset.guest) {
+	if (st.globalGuests && palette.guest) {
 		try {
 			const guests = map.getAllEntities('guest')
 			guests.forEach((g) => {
 				guestsModified++
-				g.tshirtColour = preset.guest.tshirt
-				g.hatColour = preset.guest.hat
-				g.balloonColour = preset.guest.balloon
-				g.umbrellaColour = preset.guest.umbrella
+				g.tshirtColour = palette.guest.tshirt
+				g.hatColour = palette.guest.hat
+				g.balloonColour = palette.guest.balloon
+				g.umbrellaColour = palette.guest.umbrella
 			})
 		} catch (e) {}
 
@@ -56,7 +82,7 @@ function executeApplyParkWide() {
 				context.executeAction('ridesetappearance', {
 					ride: s.id,
 					type: 0,
-					value: preset.guest.tshirt,
+					value: palette.guest.tshirt,
 					index: 0,
 				}, () => {})
 			})
@@ -66,7 +92,7 @@ function executeApplyParkWide() {
 	try {
 		park.postMessage({
 			type: 'attraction',
-			text: `Applied '${preset.name}' across park (${ridesModified} rides, ${guestsModified} guests)!`,
+			text: `Applied '${palette.name}' across park (${ridesModified} rides, ${guestsModified} guests)!`,
 			subject: rides[0] ? rides[0].id : 0,
 		})
 	} catch (e) {}
@@ -74,27 +100,52 @@ function executeApplyParkWide() {
 
 function executeApplySingleRide() {
 	const st = styleStore.get()
-	const preset = getActivePreset()
+	const palette = getActivePalette()
 	const rides = getRides()
 	const ride = st.targetRideIndex >= 0 && st.targetRideIndex < rides.length ? rides[st.targetRideIndex] : rides[0]
 	if (!ride) return
 
-	if (st.singleTrack) applyTrackColours(ride, preset)
-	if (st.singleVehicle) applyVehicleColours(ride, preset)
+	if (st.singleTrack) applyTrackColours(ride, palette)
+	if (st.singleVehicle) applyVehicleColours(ride, palette)
 
 	try {
 		park.postMessage({
 			type: 'attraction',
-			text: `Applied '${preset.name}' to ${ride.name}!`,
+			text: `Applied '${palette.name}' to ${ride.name}!`,
 			subject: ride.id,
+		})
+	} catch (e) {}
+}
+
+function saveCurrentToSlot() {
+	const st = styleStore.get()
+	const slots = (st.customSlots || DEFAULT_SLOTS).slice()
+	const idx = st.selectedSlotIndex >= 0 && st.selectedSlotIndex < slots.length ? st.selectedSlotIndex : 0
+	const mainName = (OPENRCT2_COLORS[st.customMain] || OPENRCT2_COLORS[0]).name
+	const addName = (OPENRCT2_COLORS[st.customAdd] || OPENRCT2_COLORS[0]).name
+
+	slots[idx] = {
+		name: `Slot ${idx + 1}: ${mainName} / ${addName}`,
+		main: st.customMain,
+		add: st.customAdd,
+		sup: st.customSup,
+	}
+
+	setAndPersistStyleState({ customSlots: slots })
+
+	try {
+		park.postMessage({
+			type: 'attraction',
+			text: `Saved custom palette to Slot ${idx + 1} (${mainName} / ${addName})!`,
+			subject: 0,
 		})
 	} catch (e) {}
 }
 
 export const styleWindow = window({
 	title: 'Style Manager (v0.1.0-beta)',
-	width: { value: 290, min: 290, max: 290 },
-	height: { value: 385, min: 385, max: 385 },
+	width: { value: 300, min: 300, max: 300 },
+	height: { value: 510, min: 510, max: 510 },
 	onOpen: () => {
 		const rList = getRides()
 		const curIdx = styleStore.get().targetRideIndex
@@ -116,6 +167,7 @@ export const styleWindow = window({
 							const idx = STYLE_PRESETS.findIndex((p) => p.id === st.activePresetId)
 							return idx >= 0 ? idx : 0
 						}),
+						disabled: compute(styleStore, (st) => !!st.useCustomPalette),
 						onChange: (idx) => {
 							if (idx >= 0 && idx < STYLE_PRESETS.length) {
 								setAndPersistStyleState({ activePresetId: STYLE_PRESETS[idx].id })
@@ -124,9 +176,79 @@ export const styleWindow = window({
 					}),
 					label({
 						text: compute(styleStore, (st) => {
+							if (st.useCustomPalette) return '(Custom Palette Active)'
 							const p = STYLE_PRESETS.find((item) => item.id === st.activePresetId) ?? STYLE_PRESETS[0]
 							return p.description
 						}),
+					}),
+					checkbox({
+						text: 'Use Custom Palette (3-Color)',
+						isChecked: compute(styleStore, (st) => st.useCustomPalette),
+						onChange: (val) => setAndPersistStyleState({ useCustomPalette: val }),
+					}),
+					label({ text: 'Custom Palette Slot (Max 6):' }),
+					dropdown({
+						items: compute(styleStore, (st) => {
+							const slots = st.customSlots || DEFAULT_SLOTS
+							return slots.map((s) => s.name)
+						}),
+						selectedIndex: compute(styleStore, (st) => st.selectedSlotIndex),
+						disabled: compute(styleStore, (st) => !st.useCustomPalette),
+						onChange: (idx) => {
+							const st = styleStore.get()
+							const slots = st.customSlots || DEFAULT_SLOTS
+							if (idx >= 0 && idx < slots.length) {
+								const s = slots[idx]
+								setAndPersistStyleState({
+									selectedSlotIndex: idx,
+									customMain: s.main,
+									customAdd: s.add,
+									customSup: s.sup,
+								})
+							}
+						},
+					}),
+					horizontal({
+						content: [
+							label({ text: 'Main (Track/Body):', width: '45%' }),
+							dropdown({
+								items: COLOR_NAMES,
+								width: '55%',
+								selectedIndex: compute(styleStore, (st) => st.customMain),
+								disabled: compute(styleStore, (st) => !st.useCustomPalette),
+								onChange: (val) => setAndPersistStyleState({ customMain: val }),
+							}),
+						],
+					}),
+					horizontal({
+						content: [
+							label({ text: 'Sub (Rails/Trim):', width: '45%' }),
+							dropdown({
+								items: COLOR_NAMES,
+								width: '55%',
+								selectedIndex: compute(styleStore, (st) => st.customAdd),
+								disabled: compute(styleStore, (st) => !st.useCustomPalette),
+								onChange: (val) => setAndPersistStyleState({ customAdd: val }),
+							}),
+						],
+					}),
+					horizontal({
+						content: [
+							label({ text: 'Support (Pillars):', width: '45%' }),
+							dropdown({
+								items: COLOR_NAMES,
+								width: '55%',
+								selectedIndex: compute(styleStore, (st) => st.customSup),
+								disabled: compute(styleStore, (st) => !st.useCustomPalette),
+								onChange: (val) => setAndPersistStyleState({ customSup: val }),
+							}),
+						],
+					}),
+					button({
+						text: 'Save Current Colors to Slot',
+						height: '24px',
+						disabled: compute(styleStore, (st) => !st.useCustomPalette),
+						onClick: saveCurrentToSlot,
 					}),
 				],
 			}),
