@@ -39,6 +39,19 @@ var OPENRCT2_COLORS = [
 
 var COLOR_NAMES = OPENRCT2_COLORS.map(function(c) { return c.name; });
 
+// 9-Step Continuous Vibrant Rainbow Spectrum for Chroma Mode
+var RAINBOW_PALETTE = [
+    17, // Bright Red
+    16, // Light Orange
+    25, // Yellow
+    11, // Intense Green
+    10, // Aquamarine (Cyan)
+    7,  // Light Blue
+    6,  // Dark Blue
+    5,  // Bright Purple
+    19  // Bright Pink
+];
+
 // Intelligent Bright & Dark Harmony LUTs
 var BRIGHT_LUT = [
     2, 2, 2,       // 0: Black->White, 1: Grey->White, 2: White->White
@@ -157,7 +170,7 @@ var DEFAULT_ALT_SCHEMES = [
 ];
 
 var initialStyleState = {
-    activeTab: 0, // 0 = Main Theme, 1 = Alt Schemes
+    activeTab: 0, // 0 = Main Theme, 1 = Alt Schemes, 2 = RGB Chroma
     activePresetId: 'cyber-neon',
     useCustomPalette: false,
     selectedSlotIndex: 0,
@@ -180,6 +193,13 @@ var initialStyleState = {
     targetRideIndex: 0,
     singleTrack: true,
     singleVehicle: true,
+
+    // RGB Chroma State
+    enableChroma: false,
+    chromaTarget: 0, // 0 = Selected Ride Only, 1 = All Park Rides
+    chromaVehicles: true,
+    chromaTrack: true,
+    chromaSpeed: 1,  // 0 = Slow, 1 = Normal, 2 = Fast
 
     rides: []
 };
@@ -234,7 +254,12 @@ function updateStyleState(patch) {
                     globalStation: updated.globalStation,
                     globalGuests: updated.globalGuests,
                     singleTrack: updated.singleTrack,
-                    singleVehicle: updated.singleVehicle
+                    singleVehicle: updated.singleVehicle,
+                    enableChroma: updated.enableChroma,
+                    chromaTarget: updated.chromaTarget,
+                    chromaVehicles: updated.chromaVehicles,
+                    chromaTrack: updated.chromaTrack,
+                    chromaSpeed: updated.chromaSpeed
                 });
             }
         }
@@ -306,9 +331,9 @@ function getResolvedAltSchemes(mainPalette) {
         var bA = getBrightColor(a);
         var bS = (s === 0) ? 1 : getBrightColor(s);
         return [
-            { main: bM, add: bA, sup: bS },   // Alt 1: Vibrant brightened tone
-            { main: bM, add: 2, sup: 2 },     // Alt 2: Bright spine with crisp White rails & supports
-            { main: bA, add: bM, sup: 1 }     // Alt 3: Inverted bright accents on Light Grey supports
+            { main: bM, add: bA, sup: bS },
+            { main: bM, add: 2, sup: 2 },
+            { main: bA, add: bM, sup: 1 }
         ];
     }
     // Mode 1: Darker Harmony
@@ -316,9 +341,9 @@ function getResolvedAltSchemes(mainPalette) {
         var dM = getDarkColor(m);
         var dA = getDarkColor(a);
         return [
-            { main: dM, add: dA, sup: 0 },   // Alt 1: Rich deep tones with Black supports
-            { main: dM, add: 0, sup: 0 },    // Alt 2: Deep spine with Black rails & Black supports
-            { main: 0, add: dM, sup: 0 }     // Alt 3: Obsidian Noir with glowing dark accents
+            { main: dM, add: dA, sup: 0 },
+            { main: dM, add: 0, sup: 0 },
+            { main: 0, add: dM, sup: 0 }
         ];
     }
     // Mode 2: Invert
@@ -548,30 +573,151 @@ function updateCustomAltColor(key, val) {
     updateStyleState({ customAltSchemes: alts });
 }
 
+// ==================== RGB CHROMA ANIMATION ENGINE ====================
+var chromaSubscription = null;
+var chromaTickCounter = 0;
+var chromaStep = 0;
+
+function onChromaTick() {
+    var st = styleStore.get();
+    if (!st.enableChroma) {
+        if (chromaSubscription) {
+            chromaSubscription.dispose();
+            chromaSubscription = null;
+        }
+        return;
+    }
+
+    var speedIntervals = [8, 4, 2];
+    var interval = speedIntervals[st.chromaSpeed !== undefined ? st.chromaSpeed : 1] || 4;
+    chromaTickCounter++;
+    if (chromaTickCounter % interval !== 0) {
+        return;
+    }
+
+    chromaStep = (chromaStep + 1) % 9;
+
+    var targetRides = [];
+    var allRides = getRides();
+    if (st.chromaTarget === 0) {
+        var idx = st.targetRideIndex;
+        if (idx >= 0 && idx < allRides.length) {
+            targetRides.push(allRides[idx]);
+        }
+    } else {
+        targetRides = allRides;
+    }
+
+    if (targetRides.length === 0) {
+        return;
+    }
+
+    var cMain = RAINBOW_PALETTE[chromaStep];
+    var cAlt1 = RAINBOW_PALETTE[(chromaStep + 2) % 9];
+    var cAlt2 = RAINBOW_PALETTE[(chromaStep + 4) % 9];
+    var cAlt3 = RAINBOW_PALETTE[(chromaStep + 6) % 9];
+
+    for (var rIdx = 0; rIdx < targetRides.length; rIdx++) {
+        var r = targetRides[rIdx];
+
+        // 1. Vehicle RGB
+        if (st.chromaVehicles) {
+            var numV = (r.vehicleColours && r.vehicleColours.length > 0) ? r.vehicleColours.length : 1;
+            for (var v = 0; v < numV; v++) {
+                context.executeAction('ridesetappearance', {
+                    ride: r.id,
+                    type: 3,
+                    value: cMain,
+                    index: v
+                }, function() {});
+                context.executeAction('ridesetappearance', {
+                    ride: r.id,
+                    type: 4,
+                    value: cAlt1,
+                    index: v
+                }, function() {});
+                context.executeAction('ridesetappearance', {
+                    ride: r.id,
+                    type: 5,
+                    value: cAlt2,
+                    index: v
+                }, function() {});
+            }
+        }
+
+        // 2. Track RGB Wave
+        if (st.chromaTrack) {
+            context.executeAction('ridesetappearance', {
+                ride: r.id,
+                type: 0,
+                value: cMain,
+                index: 0
+            }, function() {});
+            context.executeAction('ridesetappearance', {
+                ride: r.id,
+                type: 1,
+                value: cAlt1,
+                index: 0
+            }, function() {});
+
+            context.executeAction('ridesetappearance', {
+                ride: r.id,
+                type: 0,
+                value: cAlt1,
+                index: 1
+            }, function() {});
+            context.executeAction('ridesetappearance', {
+                ride: r.id,
+                type: 0,
+                value: cAlt2,
+                index: 2
+            }, function() {});
+            context.executeAction('ridesetappearance', {
+                ride: r.id,
+                type: 0,
+                value: cAlt3,
+                index: 3
+            }, function() {});
+        }
+    }
+}
+
+function updateChromaHook() {
+    var st = styleStore.get();
+    if (st.enableChroma) {
+        if (!chromaSubscription && typeof context !== 'undefined' && context.subscribe) {
+            chromaSubscription = context.subscribe('interval.tick', onChromaTick);
+        }
+    } else {
+        if (chromaSubscription) {
+            chromaSubscription.dispose();
+            chromaSubscription = null;
+        }
+        // Restore normal palette on stop
+        if (st.chromaTarget === 0) {
+            executeApplySingleRide();
+        } else {
+            executeApplyParkWide();
+        }
+    }
+}
+
 var lastWindowPos = null;
 
 function switchTab(targetIdx) {
     updateStyleState({ activeTab: targetIdx });
-    if (targetIdx === 0) {
-        if (altWindow && altWindow.ua) {
-            lastWindowPos = { x: altWindow.ua.x, y: altWindow.ua.y };
-            altWindow.close();
+    var windows = [mainThemeWindow, altWindow, chromaWindow];
+    for (var i = 0; i < windows.length; i++) {
+        if (windows[i] && windows[i].ua) {
+            lastWindowPos = { x: windows[i].ua.x, y: windows[i].ua.y };
+            windows[i].close();
         }
-        mainThemeWindow.open();
-        if (lastWindowPos && mainThemeWindow.ua) {
-            mainThemeWindow.ua.x = lastWindowPos.x;
-            mainThemeWindow.ua.y = lastWindowPos.y;
-        }
-    } else {
-        if (mainThemeWindow && mainThemeWindow.ua) {
-            lastWindowPos = { x: mainThemeWindow.ua.x, y: mainThemeWindow.ua.y };
-            mainThemeWindow.close();
-        }
-        altWindow.open();
-        if (lastWindowPos && altWindow.ua) {
-            altWindow.ua.x = lastWindowPos.x;
-            altWindow.ua.y = lastWindowPos.y;
-        }
+    }
+    var targetWin = windows[targetIdx] || mainThemeWindow;
+    targetWin.open();
+    if (lastWindowPos && targetWin.ua) {
+        targetWin.ua.x = lastWindowPos.x;
+        targetWin.ua.y = lastWindowPos.y;
     }
 }
 
@@ -585,6 +731,35 @@ function syncRideList() {
     });
 }
 
+function createTabRow(activeIdx) {
+    return ht({
+        height: '28px',
+        content: [
+            (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                text: 'Main Theme',
+                width: '33%',
+                height: '28px',
+                isPressed: (activeIdx === 0),
+                onClick: function() { switchTab(0); }
+            }),
+            (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                text: 'Alt Schemes',
+                width: '34%',
+                height: '28px',
+                isPressed: (activeIdx === 1),
+                onClick: function() { switchTab(1); }
+            }),
+            (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                text: 'RGB Chroma',
+                width: '33%',
+                height: '28px',
+                isPressed: (activeIdx === 2),
+                onClick: function() { switchTab(2); }
+            })
+        ]
+    });
+}
+
 // ==================== WINDOW 1: MAIN THEME ====================
 var mainThemeWindow = (function(wConfig) {
     return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
@@ -594,26 +769,7 @@ var mainThemeWindow = (function(wConfig) {
     height: { value: 435, min: 435, max: 435 },
     onOpen: syncRideList,
     content: [
-        // Top Tab Buttons (Height: 28px)
-        ht({
-            height: '28px',
-            content: [
-                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: 'Main Theme',
-                    width: '50%',
-                    height: '28px',
-                    isPressed: true,
-                    onClick: function() { switchTab(0); }
-                }),
-                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: 'Alt Schemes',
-                    width: '50%',
-                    height: '28px',
-                    isPressed: false,
-                    onClick: function() { switchTab(1); }
-                })
-            ]
-        }),
+        createTabRow(0),
 
         // Style Presets Groupbox
         kt({
@@ -813,26 +969,7 @@ var altWindow = (function(wConfig) {
     height: { value: 345, min: 345, max: 345 },
     onOpen: syncRideList,
     content: [
-        // Top Tab Buttons (Height: 28px)
-        ht({
-            height: '28px',
-            content: [
-                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: 'Main Theme',
-                    width: '50%',
-                    height: '28px',
-                    isPressed: false,
-                    onClick: function() { switchTab(0); }
-                }),
-                (function(c) { return function(n, i) { return new St(n, i, c); }; })({
-                    text: 'Alt Schemes',
-                    width: '50%',
-                    height: '28px',
-                    isPressed: true,
-                    onClick: function() { switchTab(1); }
-                })
-            ]
-        }),
+        createTabRow(1),
 
         // Alternative Colour Schemes Groupbox
         kt({
@@ -960,6 +1097,103 @@ var altWindow = (function(wConfig) {
     ]
 });
 
+// ==================== WINDOW 3: RGB CHROMA ====================
+var chromaWindow = (function(wConfig) {
+    return s(wConfig.padding) && (wConfig.padding = 5), new mt(wConfig);
+})({
+    title: 'Style Manager (v0.1.0-beta)',
+    width: { value: 320, min: 320, max: 320 },
+    height: { value: 325, min: 325, max: 325 },
+    onOpen: syncRideList,
+    content: [
+        createTabRow(2),
+
+        kt({
+            text: 'Rainbow RGB Chroma FX',
+            content: ft({
+                content: [
+                    (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                        text: 'Enable Real-Time Rainbow RGB Cycle',
+                        isChecked: styleStore.get().enableChroma,
+                        onChange: function(val) {
+                            updateStyleState({ enableChroma: val });
+                            updateChromaHook();
+                        }
+                    }),
+                    Gt({
+                        text: Mt(styleStore, function(st) {
+                            return st.enableChroma
+                                ? 'Active: Running continuous rainbow cycle...'
+                                : '(Unchecked: RGB Cycle disabled)';
+                        })
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Target:', width: '30%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: ['Selected Ride Only', 'All Park Rides'],
+                                width: '70%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.chromaTarget; }),
+                                onChange: function(idx) { updateStyleState({ chromaTarget: idx }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Ride:', width: '30%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: Mt(styleStore, function(st) {
+                                    var rList = (st.rides && st.rides.length > 0) ? st.rides : getRides();
+                                    return rList.map(function(r) { return r.name; });
+                                }),
+                                width: '70%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
+                                disabled: Mt(styleStore, function(st) { return st.chromaTarget === 1; }),
+                                onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Vehicles',
+                                width: '50%',
+                                isChecked: styleStore.get().chromaVehicles,
+                                onChange: function(val) { updateStyleState({ chromaVehicles: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Tracks',
+                                width: '50%',
+                                isChecked: styleStore.get().chromaTrack,
+                                onChange: function(val) { updateStyleState({ chromaTrack: val }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            Gt({ text: 'Speed:', width: '30%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: ['Slow (Smooth Wave)', 'Normal (Classic Chroma)', 'Fast (Hyper Gamer RGB)'],
+                                width: '70%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.chromaSpeed; }),
+                                onChange: function(idx) { updateStyleState({ chromaSpeed: idx }); }
+                            })
+                        ]
+                    }),
+                    (function(c) { return function(n, i) { return new St(n, i, c); }; })({
+                        text: 'Stop RGB & Restore Palette',
+                        height: '26px',
+                        onClick: function() {
+                            updateStyleState({ enableChroma: false });
+                            updateChromaHook();
+                        }
+                    })
+                ]
+            })
+        })
+    ]
+});
+
 registerPlugin({
     name: 'StyleManager',
     version: '0.1.0',
@@ -971,11 +1205,9 @@ registerPlugin({
         if (typeof ui !== 'undefined') {
             ui.registerMenuItem('Style Manager', function() {
                 var curTab = styleStore.get().activeTab || 0;
-                if (curTab === 1) {
-                    altWindow.open();
-                } else {
-                    mainThemeWindow.open();
-                }
+                var windows = [mainThemeWindow, altWindow, chromaWindow];
+                var win = windows[curTab] || mainThemeWindow;
+                win.open();
             });
         }
     }
