@@ -160,7 +160,7 @@ try {
     }
 } catch (e) {}
 
-var styleStore = wt(initialStyleState);
+var styleStore = Ct(initialStyleState);
 
 function updateStyleState(patch) {
     var cur = styleStore.get();
