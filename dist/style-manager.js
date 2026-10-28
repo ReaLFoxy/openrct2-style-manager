@@ -194,12 +194,14 @@ var initialStyleState = {
     singleTrack: true,
     singleVehicle: true,
 
-    // RGB Chroma State
+    // RGB Chroma FX State
     enableChroma: false,
-    chromaTarget: 0, // 0 = Selected Ride Only, 1 = All Park Rides
+    chromaTarget: 0,    // 0 = Selected Ride Only, 1 = All Park Rides
     chromaVehicles: true,
-    chromaTrack: true,
-    chromaSpeed: 1,  // 0 = Slow, 1 = Normal, 2 = Fast
+    chromaBalloons: true,
+    chromaGuests: true,
+    chromaTrack: false, // Default false to prevent lag; fast when toggled
+    chromaSpeed: 1,     // 0 = Slow, 1 = Normal, 2 = Fast
 
     rides: []
 };
@@ -258,6 +260,8 @@ function updateStyleState(patch) {
                     enableChroma: updated.enableChroma,
                     chromaTarget: updated.chromaTarget,
                     chromaVehicles: updated.chromaVehicles,
+                    chromaBalloons: updated.chromaBalloons,
+                    chromaGuests: updated.chromaGuests,
                     chromaTrack: updated.chromaTrack,
                     chromaSpeed: updated.chromaSpeed
                 });
@@ -573,7 +577,7 @@ function updateCustomAltColor(key, val) {
     updateStyleState({ customAltSchemes: alts });
 }
 
-// ==================== RGB CHROMA ANIMATION ENGINE ====================
+// ==================== ULTRA HIGH-PERFORMANCE RGB CHROMA ENGINE ====================
 var chromaSubscription = null;
 var chromaTickCounter = 0;
 var chromaStep = 0;
@@ -588,8 +592,8 @@ function onChromaTick() {
         return;
     }
 
-    var speedIntervals = [8, 4, 2];
-    var interval = speedIntervals[st.chromaSpeed !== undefined ? st.chromaSpeed : 1] || 4;
+    var speedIntervals = [10, 6, 3];
+    var interval = speedIntervals[st.chromaSpeed !== undefined ? st.chromaSpeed : 1] || 6;
     chromaTickCounter++;
     if (chromaTickCounter % interval !== 0) {
         return;
@@ -597,87 +601,77 @@ function onChromaTick() {
 
     chromaStep = (chromaStep + 1) % 9;
 
-    var targetRides = [];
-    var allRides = getRides();
-    if (st.chromaTarget === 0) {
-        var idx = st.targetRideIndex;
-        if (idx >= 0 && idx < allRides.length) {
-            targetRides.push(allRides[idx]);
-        }
-    } else {
-        targetRides = allRides;
-    }
-
-    if (targetRides.length === 0) {
-        return;
-    }
-
     var cMain = RAINBOW_PALETTE[chromaStep];
     var cAlt1 = RAINBOW_PALETTE[(chromaStep + 2) % 9];
     var cAlt2 = RAINBOW_PALETTE[(chromaStep + 4) % 9];
     var cAlt3 = RAINBOW_PALETTE[(chromaStep + 6) % 9];
 
-    for (var rIdx = 0; rIdx < targetRides.length; rIdx++) {
-        var r = targetRides[rIdx];
+    var allRides = getRides();
+    var selRide = null;
+    if (st.targetRideIndex >= 0 && st.targetRideIndex < allRides.length) {
+        selRide = allRides[st.targetRideIndex];
+    }
 
-        // 1. Vehicle RGB
-        if (st.chromaVehicles) {
-            var numV = (r.vehicleColours && r.vehicleColours.length > 0) ? r.vehicleColours.length : 1;
-            for (var v = 0; v < numV; v++) {
-                context.executeAction('ridesetappearance', {
-                    ride: r.id,
-                    type: 3,
-                    value: cMain,
-                    index: v
-                }, function() {});
-                context.executeAction('ridesetappearance', {
-                    ride: r.id,
-                    type: 4,
-                    value: cAlt1,
-                    index: v
-                }, function() {});
-                context.executeAction('ridesetappearance', {
-                    ride: r.id,
-                    type: 5,
-                    value: cAlt2,
-                    index: v
-                }, function() {});
+    // 1. Vehicles (Direct In-Memory Property Assignment - 0% LAG!)
+    if (st.chromaVehicles) {
+        try {
+            var cars = map.getAllEntities('car');
+            for (var cIdx = 0; cIdx < cars.length; cIdx++) {
+                var car = cars[cIdx];
+                if (st.chromaTarget === 0) {
+                    if (selRide && car.ride === selRide.id) {
+                        car.colours = { body: cMain, trim: cAlt1, tertiary: cAlt2 };
+                    }
+                } else {
+                    car.colours = { body: cMain, trim: cAlt1, tertiary: cAlt2 };
+                }
+            }
+        } catch (e) {}
+
+        if (st.chromaTarget === 0 && selRide) {
+            if (selRide.vehicleColours && selRide.vehicleColours.length > 0) {
+                selRide.vehicleColours[0] = { body: cMain, trim: cAlt1, tertiary: cAlt2 };
             }
         }
+    }
 
-        // 2. Track RGB Wave
-        if (st.chromaTrack) {
-            context.executeAction('ridesetappearance', {
-                ride: r.id,
-                type: 0,
-                value: cMain,
-                index: 0
-            }, function() {});
-            context.executeAction('ridesetappearance', {
-                ride: r.id,
-                type: 1,
-                value: cAlt1,
-                index: 0
-            }, function() {});
+    // 2. Guests (T-shirts & Hats) and Balloons & Umbrellas (Direct In-Memory - 0% LAG!)
+    if (st.chromaGuests || st.chromaBalloons) {
+        try {
+            var guests = map.getAllEntities('guest');
+            for (var gIdx = 0; gIdx < guests.length; gIdx++) {
+                var g = guests[gIdx];
+                var offset = (g.id || gIdx) % 9;
+                if (st.chromaGuests) {
+                    g.tshirtColour = RAINBOW_PALETTE[(chromaStep + offset) % 9];
+                    g.hatColour = RAINBOW_PALETTE[(chromaStep + offset + 4) % 9];
+                }
+                if (st.chromaBalloons) {
+                    g.balloonColour = RAINBOW_PALETTE[(chromaStep + offset + 2) % 9];
+                    g.umbrellaColour = RAINBOW_PALETTE[(chromaStep + offset + 6) % 9];
+                }
+            }
+        } catch (e) {}
+    }
 
-            context.executeAction('ridesetappearance', {
-                ride: r.id,
-                type: 0,
-                value: cAlt1,
-                index: 1
-            }, function() {});
-            context.executeAction('ridesetappearance', {
-                ride: r.id,
-                type: 0,
-                value: cAlt2,
-                index: 2
-            }, function() {});
-            context.executeAction('ridesetappearance', {
-                ride: r.id,
-                type: 0,
-                value: cAlt3,
-                index: 3
-            }, function() {});
+    // 3. Tracks (Staggered or Single Ride to maintain 60 FPS)
+    if (st.chromaTrack) {
+        if (st.chromaTarget === 0 && selRide) {
+            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cMain, index: 0 }, function() {});
+            context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt1, index: 0 }, function() {});
+            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt1, index: 1 }, function() {});
+            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt2, index: 2 }, function() {});
+            context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt3, index: 3 }, function() {});
+        } else if (st.chromaTarget === 1 && allRides.length > 0) {
+            // Stagger 1 ride per trigger cycle so the frame rate never drops!
+            var rToUpdate = allRides[chromaStep % allRides.length];
+            if (rToUpdate) {
+                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cMain, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 1, value: cAlt1, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt1, index: 1 }, function() {});
+                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt2, index: 2 }, function() {});
+                context.executeAction('ridesetappearance', { ride: rToUpdate.id, type: 0, value: cAlt3, index: 3 }, function() {});
+            }
         }
     }
 }
@@ -1103,7 +1097,7 @@ var chromaWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 325, min: 325, max: 325 },
+    height: { value: 380, min: 380, max: 380 },
     onOpen: syncRideList,
     content: [
         createTabRow(2),
@@ -1123,7 +1117,7 @@ var chromaWindow = (function(wConfig) {
                     Gt({
                         text: Mt(styleStore, function(st) {
                             return st.enableChroma
-                                ? 'Active: Running continuous rainbow cycle...'
+                                ? 'Active: Running continuous 60FPS rainbow cycle!'
                                 : '(Unchecked: RGB Cycle disabled)';
                         })
                     }),
@@ -1156,13 +1150,29 @@ var chromaWindow = (function(wConfig) {
                     ht({
                         content: [
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Vehicles',
+                                text: 'Vehicles (Cars)',
                                 width: '50%',
                                 isChecked: styleStore.get().chromaVehicles,
                                 onChange: function(val) { updateStyleState({ chromaVehicles: val }); }
                             }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Tracks',
+                                text: 'Balloons & Umbrellas',
+                                width: '50%',
+                                isChecked: styleStore.get().chromaBalloons,
+                                onChange: function(val) { updateStyleState({ chromaBalloons: val }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Guest Clothes (T-shirts)',
+                                width: '50%',
+                                isChecked: styleStore.get().chromaGuests,
+                                onChange: function(val) { updateStyleState({ chromaGuests: val }); }
+                            }),
+                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
+                                text: 'Tracks (Wave)',
                                 width: '50%',
                                 isChecked: styleStore.get().chromaTrack,
                                 onChange: function(val) { updateStyleState({ chromaTrack: val }); }
@@ -1173,7 +1183,7 @@ var chromaWindow = (function(wConfig) {
                         content: [
                             Gt({ text: 'Speed:', width: '30%' }),
                             (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
-                                items: ['Slow (Smooth Wave)', 'Normal (Classic Chroma)', 'Fast (Hyper Gamer RGB)'],
+                                items: ['Slow (Chill Wave)', 'Normal (Classic Chroma)', 'Fast (Hyper Gamer RGB)'],
                                 width: '70%',
                                 selectedIndex: Mt(styleStore, function(st) { return st.chromaSpeed; }),
                                 onChange: function(idx) { updateStyleState({ chromaSpeed: idx }); }
