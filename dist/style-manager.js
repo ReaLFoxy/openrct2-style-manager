@@ -741,62 +741,44 @@ function onChromaTick() {
         } catch (e) {}
     }
 
-    // 3. Tracks (Rainbow & Breathing Wave)
+    // 3. Tracks (Full 3 x 4 = 12 Slots: Main, Alt 1, Alt 2, Alt 3 shifting forward by 1 cell!)
     if (st.chromaTrack) {
-        if (st.chromaTarget === 0) {
-            // Selected Ride: Full 4-phase wave on this 1 ride (Spine, Rails, Supports)
-            if (selRide) {
-                // Scheme 0
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cMain, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt1, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt2, index: 0 }, function() {});
+        var ridesToProcess = (st.chromaTarget === 0) ? (selRide ? [selRide] : []) : allRides;
 
-                // Schemes 1, 2, 3
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt1, index: 1 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt2, index: 1 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt3, index: 1 }, function() {});
+        for (var rIdx = 0; rIdx < ridesToProcess.length; rIdx++) {
+            var ride = ridesToProcess[rIdx];
+            var rBasePhase = (st.chromaTarget === 0) ? 0 : (isBreathing ? (rIdx % 4) : (rIdx % stepCount));
+            var rideBaseStep = (chromaStep + rBasePhase) % stepCount;
 
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt2, index: 2 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cAlt3, index: 2 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cMain, index: 2 }, function() {});
+            // Update all 4 Schemes (0: Main, 1: Alt 1, 2: Alt 2, 3: Alt 3)
+            // Each scheme is shifted forward by exactly 1 slot (+sIdx), and advances each tick!
+            for (var sIdx = 0; sIdx < 4; sIdx++) {
+                var sStep = (rideBaseStep + sIdx) % stepCount;
+                var sSpine, sRails, sSupports;
 
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 0, value: cAlt3, index: 3 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 1, value: cMain, index: 3 }, function() {});
-                context.executeAction('ridesetappearance', { ride: selRide.id, type: 2, value: cAlt1, index: 3 }, function() {});
-
-                try {
-                    if (selRide.colourSchemes && selRide.colourSchemes.length > 0) {
-                        selRide.colourSchemes[0] = { main: cMain, additional: cAlt1, supports: cAlt2 };
-                    }
-                } catch (e) {}
-            }
-        } else {
-            // All Park Rides: Update all rides smoothly!
-            for (var rIdx = 0; rIdx < allRides.length; rIdx++) {
-                var ride = allRides[rIdx];
-                var rideColorMain, rideColorSub, rideColorSup;
                 if (isBreathing) {
-                    // Park-wide synchronized breathing wave
-                    var rPhase = (rIdx % 4);
-                    rideColorMain = activePalette[(chromaStep + rPhase) % stepCount];
-                    rideColorSub  = activePalette[(chromaStep + rPhase + 1) % stepCount];
-                    rideColorSup  = activePalette[(chromaStep + rPhase + stepCount - 1) % stepCount];
+                    sSpine     = activePalette[sStep];
+                    sRails     = activePalette[(sStep + 1) % stepCount];
+                    sSupports  = activePalette[(sStep + stepCount - 1) % stepCount];
                 } else {
-                    // Classic: High-contrast rainbow phase across every ride
-                    var rPhaseClassic = (rIdx % stepCount);
-                    rideColorMain = activePalette[(chromaStep + rPhaseClassic) % stepCount];
-                    rideColorSub  = activePalette[(chromaStep + rPhaseClassic + 2) % stepCount];
-                    rideColorSup  = activePalette[(chromaStep + rPhaseClassic + 4) % stepCount];
+                    sSpine     = activePalette[sStep];
+                    sRails     = activePalette[(sStep + 2) % stepCount];
+                    sSupports  = activePalette[(sStep + 4) % stepCount];
                 }
 
-                // Update Scheme 0 (used by all main track pieces)
-                context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: rideColorMain, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: rideColorSub, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: rideColorSup, index: 0 }, function() {});
+                // Dispatch ridesetappearance for all 3 color types (Spine=0, Rails=1, Supports=2)
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: sSpine, index: sIdx }, function() {});
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: sRails, index: sIdx }, function() {});
+                context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: sSupports, index: sIdx }, function() {});
 
+                // In-memory update for instant reflect
                 try {
-                    if (ride.colourSchemes && ride.colourSchemes.length > 0) {
-                        ride.colourSchemes[0] = { main: rideColorMain, additional: rideColorSub, supports: rideColorSup };
+                    if (ride.colourSchemes && sIdx < ride.colourSchemes.length) {
+                        ride.colourSchemes[sIdx] = {
+                            main: sSpine,
+                            additional: sRails,
+                            supports: sSupports
+                        };
                     }
                 } catch (e) {}
             }
