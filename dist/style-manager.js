@@ -703,14 +703,11 @@ function onChromaTick() {
 
     var cMain, cAlt1, cAlt2, cAlt3;
     if (isBreathing) {
-        // Breathing Mode: Unified harmonic color body!
-        // Spine, Rails, and Supports all stay in the same breathing hue family
         cMain = activePalette[chromaStep];
-        cAlt1 = activePalette[(chromaStep + 1) % stepCount];                // Immediate gentle 1-step gradient
-        cAlt2 = activePalette[(chromaStep + stepCount - 1) % stepCount];   // Immediate gentle 1-step gradient
+        cAlt1 = activePalette[(chromaStep + 1) % stepCount];
+        cAlt2 = activePalette[(chromaStep + stepCount - 1) % stepCount];
         cAlt3 = activePalette[(chromaStep + 2) % stepCount];
     } else {
-        // Classic Rainbow: High-contrast 90-degree multi-color split (Carnival Party mode)
         cMain = activePalette[chromaStep];
         cAlt1 = activePalette[(chromaStep + 2) % stepCount];
         cAlt2 = activePalette[(chromaStep + 4) % stepCount];
@@ -725,13 +722,25 @@ function onChromaTick() {
         selRide = allRides[0];
     }
 
+    // Classify into track rides and flat rides once per tick
+    var trackRides = [];
+    var flatRides = [];
+    for (var i = 0; i < allRides.length; i++) {
+        var rItem = allRides[i];
+        if (isFlatRide(rItem)) {
+            flatRides.push(rItem);
+        } else {
+            trackRides.push(rItem);
+        }
+    }
+
     // 1. Vehicles (Coasters, Go-Karts, and Flat Rides: Carousel, Enterprise, Ferris Wheel, etc.)
     if (st.chromaVehicles) {
-        var vehBaseStep = (chromaStep + 8) % stepCount; // 8-step offset from rails for vibrant contrast
+        var vehBaseStep = (chromaStep + 8) % stepCount;
         var ridesForVehicles = (st.chromaTarget === 0) ? (selRide ? [selRide] : []) : allRides;
         var vehMode = (st.chromaVehicleMode !== undefined) ? st.chromaVehicleMode : 0; // 0 = Per Car, 1 = Per Train, 2 = All Same
 
-        // OpenRCT2 vehicleColourScheme: 2 = Per Car, 1 = Per Train, 0 = All Same
+        // Sync OpenRCT2 vehicleColourScheme mode once when changed (type 6: 2 = Per Car, 1 = Per Train, 0 = All Same)
         var targetScheme = (vehMode === 0) ? 2 : ((vehMode === 1) ? 1 : 0);
         if (lastSyncVehicleMode !== targetScheme) {
             lastSyncVehicleMode = targetScheme;
@@ -748,164 +757,150 @@ function onChromaTick() {
             }
         }
 
-        for (var rIdx = 0; rIdx < ridesForVehicles.length; rIdx++) {
-            var vRide = ridesForVehicles[rIdx];
-            if (!vRide) continue;
+        // 1A. Track Rides with moving cars (Direct In-Memory - 0% LAG, 0 GameActions!)
+        var targetTrackRides = (st.chromaTarget === 0) ? (selRide && !isFlatRide(selRide) ? [selRide] : []) : trackRides;
+        for (var trIdx = 0; trIdx < targetTrackRides.length; trIdx++) {
+            var vRide = targetTrackRides[trIdx];
+            if (!vRide || vRide.status === 'closed') continue;
 
-            var isFlat = isFlatRide(vRide);
-            var rVehOffset = (st.chromaTarget === 0) ? 0 : (rIdx * 3);
+            var rVehOffset = (st.chromaTarget === 0) ? 0 : (trIdx * 3);
+            var trainVehicles = vRide.vehicles;
+            if (trainVehicles && trainVehicles.length > 0) {
+                var isSingleCarRides = (trainVehicles.length > 4);
 
-            if (isFlat) {
-                // Flat Rides: Merry-go-round, Enterprise, Ferris Wheel, etc.
-                var fStep = (vehBaseStep + rVehOffset) % stepCount;
+                for (var tIdx = 0; tIdx < trainVehicles.length; tIdx++) {
+                    var currentCarId = trainVehicles[tIdx];
+                    var carPos = 0;
+
+                    var trainShift = 0;
+                    if (vehMode === 1) {
+                        trainShift = tIdx * (isBreathing ? 4 : 5);
+                    } else if (vehMode === 0 && isSingleCarRides) {
+                        trainShift = tIdx * (isBreathing ? 2 : 3);
+                    }
+
+                    while (currentCarId !== null && currentCarId !== undefined) {
+                        var car = map.getEntity(currentCarId);
+                        if (!car || car.type !== 'car') {
+                            break;
+                        }
+
+                        var carShift = 0;
+                        if (vehMode === 0) {
+                            carShift = carPos * 1;
+                        }
+
+                        // Notice '- carShift': As vehBaseStep increments, color from Car k pushes backward to Car k+1!
+                        var cStep = (vehBaseStep + rVehOffset + trainShift - carShift + stepCount * 100) % stepCount;
+                        var cBody = activePalette[cStep];
+                        var cTrim = isBreathing ? activePalette[(cStep + 1) % stepCount] : activePalette[(cStep + 2) % stepCount];
+                        var cTert = isBreathing ? activePalette[(cStep + stepCount - 1) % stepCount] : activePalette[(cStep + 4) % stepCount];
+
+                        // DIRECT MEMORY SET - 100% Zero-Lag!
+                        car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
+
+                        currentCarId = car.nextCarOnTrain;
+                        carPos++;
+                    }
+                }
+            }
+        }
+
+        // 1B. Flat Rides (Carousel, Enterprise, Ferris Wheel, etc.)
+        // Flat rides use ride.vehicleColours[0] (3 actions)
+        var targetFlatRides = (st.chromaTarget === 0) ? (selRide && isFlatRide(selRide) ? [selRide] : []) : flatRides;
+        if (targetFlatRides.length > 0) {
+            // If target is single ride, update it. If all park, stagger 1 flat ride per cycle to eliminate lag!
+            var flatsToUpdate = (st.chromaTarget === 0)
+                ? targetFlatRides
+                : [targetFlatRides[chromaStep % targetFlatRides.length]];
+
+            for (var fIdx = 0; fIdx < flatsToUpdate.length; fIdx++) {
+                var fRide = flatsToUpdate[fIdx];
+                if (!fRide || fRide.status === 'closed') continue;
+
+                var fStep = (vehBaseStep + fIdx * 3) % stepCount;
                 var fBody = activePalette[fStep];
                 var fTrim = isBreathing ? activePalette[(fStep + 1) % stepCount] : activePalette[(fStep + 2) % stepCount];
                 var fTert = isBreathing ? activePalette[(fStep + stepCount - 1) % stepCount] : activePalette[(fStep + 4) % stepCount];
 
-                context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: fBody, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: fTrim, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: fTert, index: 0 }, function() {});
-            } else {
-                // Track Rides with moving cars (Roller Coasters, Go-Karts, Car Rides, etc.)
-                var trainVehicles = vRide.vehicles;
-                if (trainVehicles && trainVehicles.length > 0) {
-                    var isSingleCarRides = (vRide.numCarsPerTrain === 1 || trainVehicles.length > 4);
-
-                    for (var tIdx = 0; tIdx < trainVehicles.length; tIdx++) {
-                        var currentCarId = trainVehicles[tIdx];
-                        var carPos = 0;
-
-                        // Mode 1: Per Train -> Each train has a different color family; all cars in that train match.
-                        // Mode 0: Per Car -> trainShift is 0 so ALL trains share the identical per-car color spectrum!
-                        var trainShift = 0;
-                        if (vehMode === 1) {
-                            trainShift = tIdx * (isBreathing ? 4 : 5);
-                        } else if (vehMode === 0 && isSingleCarRides) {
-                            trainShift = tIdx * (isBreathing ? 2 : 3);
-                        }
-
-                        while (currentCarId !== null && currentCarId !== undefined) {
-                            var car = map.getEntity(currentCarId);
-                            if (!car || car.type !== 'car') {
-                                break;
-                            }
-
-                            // Mode 0: Per Car -> Each car gets its color from palette, and shifts backward each tick!
-                            // Waves push backward each tick: Car 0 -> Car 1 -> Car 2... regardless of car count!
-                            var carShift = 0;
-                            if (vehMode === 0) {
-                                carShift = carPos * 1;
-                            }
-
-                            // Notice '- carShift': As vehBaseStep increments, color from Car k pushes backward to Car k+1!
-                            var cStep = (vehBaseStep + rVehOffset + trainShift - carShift + stepCount * 100) % stepCount;
-                            var cBody = activePalette[cStep];
-                            var cTrim = isBreathing ? activePalette[(cStep + 1) % stepCount] : activePalette[(cStep + 2) % stepCount];
-                            var cTert = isBreathing ? activePalette[(cStep + stepCount - 1) % stepCount] : activePalette[(cStep + 4) % stepCount];
-
-                            car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
-
-                            // Sync in-memory ride.vehicleColours for any number of cars
-                            try {
-                                if (vRide.vehicleColours && carPos < vRide.vehicleColours.length) {
-                                    vRide.vehicleColours[carPos] = { body: cBody, trim: cTrim, tertiary: cTert };
-                                }
-                            } catch (e) {}
-
-                            // Dispatch ridesetappearance for the selected ride so OpenRCT2 in-game UI updates without overflowing the action queue
-                            if (selRide && vRide.id === selRide.id) {
-                                if (vehMode === 0) {
-                                    if (tIdx === 0) {
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
-                                    }
-                                } else if (vehMode === 1) {
-                                    if (carPos === 0) {
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: tIdx }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: tIdx }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: tIdx }, function() {});
-                                    }
-                                } else {
-                                    if (tIdx === 0 && carPos === 0) {
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: 0 }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: 0 }, function() {});
-                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: 0 }, function() {});
-                                    }
-                                }
-                            }
-
-                            currentCarId = car.nextCarOnTrain;
-                            carPos++;
-                        }
-                    }
-                } else {
-                    // Fallback for cars if vehicles array not populated:
-                    try {
-                        var allCars = map.getAllEntities('car');
-                        for (var cIdx = 0; cIdx < allCars.length; cIdx++) {
-                            var fallbackCar = allCars[cIdx];
-                            if (fallbackCar.ride === vRide.id) {
-                                var fbStep = (vehBaseStep + rVehOffset) % stepCount;
-                                fallbackCar.colours = {
-                                    body: activePalette[fbStep],
-                                    trim: activePalette[(fbStep + 1) % stepCount],
-                                    tertiary: activePalette[(fbStep + 2) % stepCount]
-                                };
-                            }
-                        }
-                    } catch (e) {}
-                }
+                context.executeAction('ridesetappearance', { ride: fRide.id, type: 3, value: fBody, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: fRide.id, type: 4, value: fTrim, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: fRide.id, type: 5, value: fTert, index: 0 }, function() {});
             }
         }
     }
 
-    // 2. Guests (T-shirts & Hats) and Balloons & Umbrellas (Direct In-Memory - 0% LAG!)
+    // 2. Guests & Balloons (Batched / Throttled for 60 FPS performance)
     if (st.chromaGuests || st.chromaBalloons) {
-        try {
-            var guests = map.getAllEntities('guest');
-            for (var gIdx = 0; gIdx < guests.length; gIdx++) {
-                var g = guests[gIdx];
-                var offset = (g.id || gIdx);
-                if (isBreathing) {
-                    // Gentle breathing ripple across crowd
-                    var gPhase = (offset % 4);
-                    if (st.chromaGuests) {
-                        g.tshirtColour = activePalette[(chromaStep + gPhase) % stepCount];
-                        g.hatColour = activePalette[(chromaStep + gPhase + 1) % stepCount];
-                    }
-                    if (st.chromaBalloons) {
-                        g.balloonColour = activePalette[(chromaStep + gPhase + 2) % stepCount];
-                        g.umbrellaColour = activePalette[(chromaStep + gPhase) % stepCount];
-                    }
-                } else {
-                    // Classic: Wild multi-color crowd
-                    var gPhaseClassic = (offset % stepCount);
-                    if (st.chromaGuests) {
-                        g.tshirtColour = activePalette[(chromaStep + gPhaseClassic) % stepCount];
-                        g.hatColour = activePalette[(chromaStep + gPhaseClassic + 4) % stepCount];
-                    }
-                    if (st.chromaBalloons) {
-                        g.balloonColour = activePalette[(chromaStep + gPhaseClassic + 2) % stepCount];
-                        g.umbrellaColour = activePalette[(chromaStep + gPhaseClassic + 6) % stepCount];
+        if (chromaTickCounter % (interval * 2) === 0) {
+            try {
+                var guests = map.getAllEntities('guest');
+                for (var gIdx = 0; gIdx < guests.length; gIdx++) {
+                    var g = guests[gIdx];
+                    var offset = (g.id || gIdx);
+                    if (isBreathing) {
+                        var gPhase = (offset % 4);
+                        if (st.chromaGuests) {
+                            g.tshirtColour = activePalette[(chromaStep + gPhase) % stepCount];
+                            g.hatColour = activePalette[(chromaStep + gPhase + 1) % stepCount];
+                        }
+                        if (st.chromaBalloons) {
+                            g.balloonColour = activePalette[(chromaStep + gPhase + 2) % stepCount];
+                            g.umbrellaColour = activePalette[(chromaStep + gPhase) % stepCount];
+                        }
+                    } else {
+                        var gPhaseClassic = (offset % stepCount);
+                        if (st.chromaGuests) {
+                            g.tshirtColour = activePalette[(chromaStep + gPhaseClassic) % stepCount];
+                            g.hatColour = activePalette[(chromaStep + gPhaseClassic + 4) % stepCount];
+                        }
+                        if (st.chromaBalloons) {
+                            g.balloonColour = activePalette[(chromaStep + gPhaseClassic + 2) % stepCount];
+                            g.umbrellaColour = activePalette[(chromaStep + gPhaseClassic + 6) % stepCount];
+                        }
                     }
                 }
-            }
-        } catch (e) {}
+            } catch (e) {}
+        }
     }
 
-    // 3. Tracks (Full 3 x 4 = 12 Slots: Main, Alt 1, Alt 2, Alt 3 shifting forward by 1 cell!)
-    if (st.chromaTrack) {
-        var ridesToProcess = (st.chromaTarget === 0) ? (selRide ? [selRide] : []) : allRides;
+    // 3. Tracks (Rainbow Track Wave - Staggered to prevent game action queue lag)
+    if (st.chromaTrack && trackRides.length > 0) {
+        var ridesToProcess = [];
+        if (st.chromaTarget === 0) {
+            if (selRide && !isFlatRide(selRide)) {
+                ridesToProcess.push(selRide);
+            }
+        } else {
+            // Stagger 2 rides per cycle so the game runs at full 60 FPS without action queue drops!
+            // If user selected a ride, always include it, plus 1 rotating ride
+            if (selRide && !isFlatRide(selRide)) {
+                ridesToProcess.push(selRide);
+                var rotIdx = chromaStep % trackRides.length;
+                if (trackRides[rotIdx].id !== selRide.id) {
+                    ridesToProcess.push(trackRides[rotIdx]);
+                }
+            } else {
+                var r1 = chromaStep % trackRides.length;
+                var r2 = (chromaStep + 1) % trackRides.length;
+                ridesToProcess.push(trackRides[r1]);
+                if (r1 !== r2) {
+                    ridesToProcess.push(trackRides[r2]);
+                }
+            }
+        }
 
         for (var rIdx = 0; rIdx < ridesToProcess.length; rIdx++) {
             var ride = ridesToProcess[rIdx];
+            if (!ride || ride.status === 'closed') continue;
+
             var rBasePhase = (st.chromaTarget === 0) ? 0 : (isBreathing ? (rIdx % 4) : (rIdx % stepCount));
             var rideBaseStep = (chromaStep + rBasePhase) % stepCount;
 
-            // Update all 4 Schemes (0: Main, 1: Alt 1, 2: Alt 2, 3: Alt 3)
-            // Each scheme is shifted forward by exactly 1 slot (+sIdx), and advances each tick!
-            for (var sIdx = 0; sIdx < 4; sIdx++) {
+            // Only update up to the schemes the ride actually uses (1 or 4)
+            var maxSchemes = (ride.colourSchemes && ride.colourSchemes.length > 1) ? 4 : 1;
+            for (var sIdx = 0; sIdx < maxSchemes; sIdx++) {
                 var sStep = (rideBaseStep + sIdx) % stepCount;
                 var sSpine, sRails, sSupports;
 
@@ -923,17 +918,6 @@ function onChromaTick() {
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: sSpine, index: sIdx }, function() {});
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: sRails, index: sIdx }, function() {});
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: sSupports, index: sIdx }, function() {});
-
-                // In-memory update for instant reflect
-                try {
-                    if (ride.colourSchemes && sIdx < ride.colourSchemes.length) {
-                        ride.colourSchemes[sIdx] = {
-                            main: sSpine,
-                            additional: sRails,
-                            supports: sSupports
-                        };
-                    }
-                } catch (e) {}
             }
         }
     }
