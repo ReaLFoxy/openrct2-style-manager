@@ -765,19 +765,34 @@ function onChromaTick() {
                                 break;
                             }
 
-                            // Mode 0: Per Car -> Each car along the train advances (+1 step in Breathing, +2 in Classic)!
-                            // Mode 1: Per Train & Mode 2: All Same -> carShift is 0 so all cars in the train share the same color.
+                            // Mode 0: Per Car -> Each car gets its color from palette, and shifts backward each tick!
+                            // Waves push backward each tick: Car 0 -> Car 1 -> Car 2...
                             var carShift = 0;
                             if (vehMode === 0) {
-                                carShift = carPos * (isBreathing ? 1 : 2);
+                                carShift = carPos * (isBreathing ? 1 : 1);
                             }
 
-                            var cStep = (vehBaseStep + rVehOffset + trainShift + carShift) % stepCount;
+                            // Notice '- carShift': As vehBaseStep increments, color from Car k pushes backward to Car k+1!
+                            var cStep = (vehBaseStep + rVehOffset + trainShift - carShift + stepCount * 100) % stepCount;
                             var cBody = activePalette[cStep];
                             var cTrim = isBreathing ? activePalette[(cStep + 1) % stepCount] : activePalette[(cStep + 2) % stepCount];
                             var cTert = isBreathing ? activePalette[(cStep + stepCount - 1) % stepCount] : activePalette[(cStep + 4) % stepCount];
 
                             car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
+
+                            // Also sync in-memory ride.vehicleColours so OpenRCT2 ride window reflects each car's live color
+                            try {
+                                if (vRide.vehicleColours && carPos < vRide.vehicleColours.length) {
+                                    vRide.vehicleColours[carPos] = { body: cBody, trim: cTrim, tertiary: cTert };
+                                }
+                            } catch (e) {}
+
+                            // If this ride is the selected ride, dispatch ridesetappearance for car index so the in-game UI updates
+                            if (st.chromaTarget === 0 && selRide && vRide.id === selRide.id && tIdx === 0) {
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
+                            }
 
                             currentCarId = car.nextCarOnTrain;
                             carPos++;
