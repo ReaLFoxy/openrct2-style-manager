@@ -761,7 +761,7 @@ function onChromaTick() {
         var targetTrackRides = (st.chromaTarget === 0) ? (selRide && !isFlatRide(selRide) ? [selRide] : []) : trackRides;
         for (var trIdx = 0; trIdx < targetTrackRides.length; trIdx++) {
             var vRide = targetTrackRides[trIdx];
-            if (!vRide || vRide.status === 'closed') continue;
+            if (!vRide) continue;
 
             var rVehOffset = (st.chromaTarget === 0) ? 0 : (trIdx * 3);
             var trainVehicles = vRide.vehicles;
@@ -806,11 +806,11 @@ function onChromaTick() {
             }
         }
 
-        // 1B. Flat Rides (Carousel, Enterprise, Ferris Wheel, etc.)
+        // 1B. Flat Rides & Tower Rides (Carousel, Enterprise, Ferris Wheel, Top Spin, Launched Freefall, etc.)
         var targetFlatRides = (st.chromaTarget === 0) ? (selRide && isFlatRide(selRide) ? [selRide] : []) : flatRides;
         for (var fIdx = 0; fIdx < targetFlatRides.length; fIdx++) {
             var fRide = targetFlatRides[fIdx];
-            if (!fRide || fRide.status === 'closed') continue;
+            if (!fRide) continue;
 
             var fStep = (vehBaseStep + fIdx * 3) % stepCount;
             var fBody = activePalette[fStep];
@@ -820,6 +820,16 @@ function onChromaTick() {
             context.executeAction('ridesetappearance', { ride: fRide.id, type: 3, value: fBody, index: 0 }, function() {});
             context.executeAction('ridesetappearance', { ride: fRide.id, type: 4, value: fTrim, index: 0 }, function() {});
             context.executeAction('ridesetappearance', { ride: fRide.id, type: 5, value: fTert, index: 0 }, function() {});
+
+            // Direct in-memory car entity update for flat/tower rides that have car entities (e.g. Launched Freefall, Top Spin)
+            if (fRide.vehicles && fRide.vehicles.length > 0) {
+                for (var vIdx = 0; vIdx < fRide.vehicles.length; vIdx++) {
+                    var fCar = map.getEntity(fRide.vehicles[vIdx]);
+                    if (fCar && fCar.type === 'car') {
+                        fCar.colours = { body: fBody, trim: fTrim, tertiary: fTert };
+                    }
+                }
+            }
         }
     }
 
@@ -857,15 +867,15 @@ function onChromaTick() {
         }
     }
 
-    // 3. Tracks (Full 3 x 4 = 12 Slots: Main, Alt 1, Alt 2, Alt 3 shifting forward simultaneously at full speed!)
-    if (st.chromaTrack && trackRides.length > 0) {
+    // 3. Tracks & Ride Structures (Coasters, Towers, and Flat Ride Frames shifting forward simultaneously at full speed!)
+    if (st.chromaTrack && allRides.length > 0) {
         var ridesToProcess = (st.chromaTarget === 0)
-            ? (selRide && !isFlatRide(selRide) ? [selRide] : [])
-            : trackRides;
+            ? (selRide ? [selRide] : [])
+            : allRides;
 
         for (var rIdx = 0; rIdx < ridesToProcess.length; rIdx++) {
             var ride = ridesToProcess[rIdx];
-            if (!ride || ride.status === 'closed') continue;
+            if (!ride) continue;
 
             var rBasePhase = (st.chromaTarget === 0) ? 0 : (isBreathing ? (rIdx % 4) : (rIdx % stepCount));
             var rideBaseStep = (chromaStep + rBasePhase) % stepCount;
@@ -885,7 +895,7 @@ function onChromaTick() {
                     sSupports  = activePalette[(sStep + 4) % stepCount];
                 }
 
-                // Dispatch ridesetappearance for all 3 color types (Spine=0, Rails=1, Supports=2)
+                // Dispatch ridesetappearance for all 3 color types (Spine/Lattice/Frame=0, Rails/Stripes=1, Supports/Foundation=2)
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: sSpine, index: sIdx }, function() {});
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: sRails, index: sIdx }, function() {});
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: sSupports, index: sIdx }, function() {});
