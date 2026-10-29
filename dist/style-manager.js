@@ -41,55 +41,55 @@ var COLOR_NAMES = OPENRCT2_COLORS.map(function(c) { return c.name; });
 
 // 9-Step Continuous Vibrant Rainbow Spectrum for Chroma Mode
 
-// 32-Step Smooth Serpentine "Breathing RGB" Spectrum (Hand-drawn path: Inhale/Exhale Sine Wave)
+// 32-Step Smooth Serpentine "Breathing RGB" Spectrum (Exact OpenRCT2 Native Palette Grid Mapping)
 var BREATHING_PALETTE = [
-    // 1. Red (Down: Dark -> Bright -> Light)
-    18, // 0: Dark Red
-    18, // 1: Medium Red / Saturated
-    17, // 2: Bright Red
-    30, // 3: Light Coral / Pink
+    // 1. Column 1 (Reds) - Down (Deep Saturated -> Ruby -> Vivid Red -> Pale Pink)
+    27, // Row 0: saturatedRed
+    71, // Row 1: ruby
+    28, // Row 2: brightRed
+    31, // Row 3: lightPink
 
-    // 2. Orange (Up: Light -> Bright -> Dark)
-    24, // 4: Light Peach
-    16, // 5: Light Orange
-    15, // 6: Amber / Rich Orange
-    27, // 7: Dark Bronze / Deep Orange
+    // 2. Column 2 (Oranges) - Up (Pale Peach -> Light Orange -> Rich Amber -> Deep Dark Orange)
+    49, // Row 3: pastelOrange
+    20, // Row 2: lightOrange
+    57, // Row 1: amber
+    21, // Row 0: darkOrange
 
-    // 3. Yellow (Down: Dark -> Bright -> Light)
-    27, // 8: Bronze / Gold
-    25, // 9: Rich Yellow
-    25, // 10: Bright Yellow
-    24, // 11: Light Peach / Pale Yellow
+    // 3. Column 3 (Yellows) - Down (Dark Yellow -> Royal Gold -> Pure Yellow -> Bright Yellow)
+    19, // Row 0: darkYellow
+    56, // Row 1: gold
+    18, // Row 2: yellow
+    17, // Row 3: brightYellow
 
-    // 4. Olive & Moss (Up: Light -> Bright -> Dark)
-    28, // 12: Pastel Green / Lime
-    13, // 13: Moss Green
-    26, // 14: Olive Green
-    14, // 15: Dark Olive Green
+    // 4. Column 4 (Forest / Olive Greens) - Up (Chartreuse -> Moss Green -> Cactus -> Forest Green)
+    38, // Row 3: chartreuse
+    13, // Row 2: mossGreen
+    62, // Row 1: cactus
+    37, // Row 0: forestGreen
 
-    // 5. Green (Down: Dark -> Bright -> Light)
-    12, // 16: Dark Green
-    11, // 17: Intense Green
-    11, // 18: Bright Green
-    28, // 19: Mint / Pastel Green
+    // 5. Column 5 (Saturated Greens) - Down (Saturated Green -> Emerald -> Bright Green -> Lime)
+    11, // Row 0: saturatedGreen
+    67, // Row 1: emerald
+    14, // Row 2: brightGreen
+    41, // Row 3: limeGreen
 
-    // 6. Teal & Cyan (Up: Light -> Bright -> Dark)
-    10, // 20: Light Water / Aquamarine
-    10, // 21: Aquamarine
-    9,  // 22: Teal / Dark Water
-    9,  // 23: Deep Teal / Deep Water
+    // 6. Column 6 (Teal / Waters) - Up (Light Water -> Dark Water -> Darker Water -> Deep Water)
+    10, // Row 3: lightWater
+    9,  // Row 2: darkWater
+    66, // Row 1: darkerWater
+    50, // Row 0: deepWater
 
-    // 7. Blue (Down: Dark -> Bright -> Light)
-    6,  // 24: Dark Blue / Navy
-    31, // 25: Light Indigo / Blue
-    7,  // 26: Light Blue
-    8,  // 27: Icy Blue
+    // 7. Column 7 (Blues) - Down (Deep Blue -> Dark Blue -> Light Blue -> Icy Blue)
+    72, // Row 0: deepBlue
+    6,  // Row 1: darkBlue
+    7,  // Row 2: lightBlue
+    8,  // Row 3: icyBlue
 
-    // 8. Purple (Up: Light -> Bright -> Dark)
-    22, // 28: Lavender
-    4,  // 29: Light Purple
-    5,  // 30: Bright Purple
-    3   // 31: Dark Purple
+    // 8. Column 8 (Purples / Violets) - Up (Lavender -> Bright Purple -> Amethyst -> Violet)
+    48, // Row 3: lavender
+    5,  // Row 2: brightPurple
+    58, // Row 1: amethyst
+    47  // Row 0: violet
 ];
 
 var RAINBOW_PALETTE = [
@@ -650,8 +650,8 @@ function onChromaTick() {
     var activePalette = isBreathing ? BREATHING_PALETTE : RAINBOW_PALETTE;
     var stepCount = activePalette.length;
 
-    // Timing intervals adapted for 32-step Breathing vs 9-step Rainbow
-    var speedIntervals = isBreathing ? [8, 4, 2] : [10, 6, 3];
+    // Timing intervals: Breathing takes ~3.2s per breath cycle at Normal; Classic rotates fast
+    var speedIntervals = isBreathing ? [7, 4, 2] : [10, 6, 3];
     var interval = speedIntervals[st.chromaSpeed !== undefined ? st.chromaSpeed : 1] || (isBreathing ? 4 : 6);
     chromaTickCounter++;
     if (chromaTickCounter % interval !== 0) {
@@ -660,11 +660,21 @@ function onChromaTick() {
 
     chromaStep = (chromaStep + 1) % stepCount;
 
-    var shift = isBreathing ? 4 : 2;
-    var cMain = activePalette[chromaStep];
-    var cAlt1 = activePalette[(chromaStep + shift) % stepCount];
-    var cAlt2 = activePalette[(chromaStep + shift * 2) % stepCount];
-    var cAlt3 = activePalette[(chromaStep + shift * 3) % stepCount];
+    var cMain, cAlt1, cAlt2, cAlt3;
+    if (isBreathing) {
+        // Breathing Mode: Unified harmonic color body!
+        // Spine, Rails, and Supports all stay in the same breathing hue family
+        cMain = activePalette[chromaStep];
+        cAlt1 = activePalette[(chromaStep + 1) % stepCount];                // Immediate gentle 1-step gradient
+        cAlt2 = activePalette[(chromaStep + stepCount - 1) % stepCount];   // Immediate gentle 1-step gradient
+        cAlt3 = activePalette[(chromaStep + 2) % stepCount];
+    } else {
+        // Classic Rainbow: High-contrast 90-degree multi-color split (Carnival Party mode)
+        cMain = activePalette[chromaStep];
+        cAlt1 = activePalette[(chromaStep + 2) % stepCount];
+        cAlt2 = activePalette[(chromaStep + 4) % stepCount];
+        cAlt3 = activePalette[(chromaStep + 6) % stepCount];
+    }
 
     var allRides = getRides();
     var selRide = null;
@@ -704,20 +714,34 @@ function onChromaTick() {
             for (var gIdx = 0; gIdx < guests.length; gIdx++) {
                 var g = guests[gIdx];
                 var offset = (g.id || gIdx);
-                var gOffset = isBreathing ? ((offset * 2) % stepCount) : (offset % stepCount);
-                if (st.chromaGuests) {
-                    g.tshirtColour = activePalette[(chromaStep + gOffset) % stepCount];
-                    g.hatColour = activePalette[(chromaStep + gOffset + shift * 2) % stepCount];
-                }
-                if (st.chromaBalloons) {
-                    g.balloonColour = activePalette[(chromaStep + gOffset + shift) % stepCount];
-                    g.umbrellaColour = activePalette[(chromaStep + gOffset + shift * 3) % stepCount];
+                if (isBreathing) {
+                    // Gentle breathing ripple across crowd
+                    var gPhase = (offset % 4);
+                    if (st.chromaGuests) {
+                        g.tshirtColour = activePalette[(chromaStep + gPhase) % stepCount];
+                        g.hatColour = activePalette[(chromaStep + gPhase + 1) % stepCount];
+                    }
+                    if (st.chromaBalloons) {
+                        g.balloonColour = activePalette[(chromaStep + gPhase + 2) % stepCount];
+                        g.umbrellaColour = activePalette[(chromaStep + gPhase) % stepCount];
+                    }
+                } else {
+                    // Classic: Wild multi-color crowd
+                    var gPhaseClassic = (offset % stepCount);
+                    if (st.chromaGuests) {
+                        g.tshirtColour = activePalette[(chromaStep + gPhaseClassic) % stepCount];
+                        g.hatColour = activePalette[(chromaStep + gPhaseClassic + 4) % stepCount];
+                    }
+                    if (st.chromaBalloons) {
+                        g.balloonColour = activePalette[(chromaStep + gPhaseClassic + 2) % stepCount];
+                        g.umbrellaColour = activePalette[(chromaStep + gPhaseClassic + 6) % stepCount];
+                    }
                 }
             }
         } catch (e) {}
     }
 
-    // 3. Tracks (Rainbow & Breathing Sine Wave)
+    // 3. Tracks (Rainbow & Breathing Wave)
     if (st.chromaTrack) {
         if (st.chromaTarget === 0) {
             // Selected Ride: Full 4-phase wave on this 1 ride (Spine, Rails, Supports)
@@ -747,13 +771,23 @@ function onChromaTick() {
                 } catch (e) {}
             }
         } else {
-            // All Park Rides: Update all rides smoothly with phased wave colors!
+            // All Park Rides: Update all rides smoothly!
             for (var rIdx = 0; rIdx < allRides.length; rIdx++) {
                 var ride = allRides[rIdx];
-                var ridePhase = isBreathing ? ((rIdx * 3) % stepCount) : (rIdx % stepCount);
-                var rideColorMain = activePalette[(chromaStep + ridePhase) % stepCount];
-                var rideColorSub  = activePalette[(chromaStep + ridePhase + shift) % stepCount];
-                var rideColorSup  = activePalette[(chromaStep + ridePhase + shift * 2) % stepCount];
+                var rideColorMain, rideColorSub, rideColorSup;
+                if (isBreathing) {
+                    // Park-wide synchronized breathing wave
+                    var rPhase = (rIdx % 4);
+                    rideColorMain = activePalette[(chromaStep + rPhase) % stepCount];
+                    rideColorSub  = activePalette[(chromaStep + rPhase + 1) % stepCount];
+                    rideColorSup  = activePalette[(chromaStep + rPhase + stepCount - 1) % stepCount];
+                } else {
+                    // Classic: High-contrast rainbow phase across every ride
+                    var rPhaseClassic = (rIdx % stepCount);
+                    rideColorMain = activePalette[(chromaStep + rPhaseClassic) % stepCount];
+                    rideColorSub  = activePalette[(chromaStep + rPhaseClassic + 2) % stepCount];
+                    rideColorSup  = activePalette[(chromaStep + rPhaseClassic + 4) % stepCount];
+                }
 
                 // Update Scheme 0 (used by all main track pieces)
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 0, value: rideColorMain, index: 0 }, function() {});
@@ -769,7 +803,6 @@ function onChromaTick() {
         }
     }
 }
-
 function updateChromaHook() {
     var st = styleStore.get();
     if (st.enableChroma) {
