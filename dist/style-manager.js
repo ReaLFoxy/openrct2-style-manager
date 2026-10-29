@@ -662,6 +662,7 @@ function updateCustomAltColor(key, val) {
 var chromaSubscription = null;
 var chromaTickCounter = 0;
 var chromaStep = 0;
+var lastSyncVehicleMode = -1;
 
 function onChromaTick() {
     var st = styleStore.get();
@@ -670,6 +671,7 @@ function onChromaTick() {
             chromaSubscription.dispose();
             chromaSubscription = null;
         }
+        lastSyncVehicleMode = -1;
         return;
     }
 
@@ -716,6 +718,23 @@ function onChromaTick() {
         var vehBaseStep = (chromaStep + 8) % stepCount; // 8-step offset from rails for vibrant contrast
         var ridesForVehicles = (st.chromaTarget === 0) ? (selRide ? [selRide] : []) : allRides;
         var vehMode = (st.chromaVehicleMode !== undefined) ? st.chromaVehicleMode : 0; // 0 = Per Car, 1 = Per Train, 2 = All Same
+
+        // OpenRCT2 vehicleColourScheme: 2 = Per Car, 1 = Per Train, 0 = All Same
+        var targetScheme = (vehMode === 0) ? 2 : ((vehMode === 1) ? 1 : 0);
+        if (lastSyncVehicleMode !== targetScheme) {
+            lastSyncVehicleMode = targetScheme;
+            for (var sIdx = 0; sIdx < ridesForVehicles.length; sIdx++) {
+                var rSync = ridesForVehicles[sIdx];
+                if (rSync && (!rSync.object || rSync.object.carsPerFlatRide === 0)) {
+                    context.executeAction('ridesetappearance', {
+                        ride: rSync.id,
+                        type: 6,
+                        value: targetScheme,
+                        index: 0
+                    }, function() {});
+                }
+            }
+        }
 
         for (var rIdx = 0; rIdx < ridesForVehicles.length; rIdx++) {
             var vRide = ridesForVehicles[rIdx];
@@ -766,10 +785,9 @@ function onChromaTick() {
                             }
 
                             // Mode 0: Per Car -> Each car gets its color from palette, and shifts backward each tick!
-                            // Waves push backward each tick: Car 0 -> Car 1 -> Car 2...
                             var carShift = 0;
                             if (vehMode === 0) {
-                                carShift = carPos * (isBreathing ? 1 : 1);
+                                carShift = carPos * 1;
                             }
 
                             // Notice '- carShift': As vehBaseStep increments, color from Car k pushes backward to Car k+1!
@@ -780,18 +798,19 @@ function onChromaTick() {
 
                             car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
 
-                            // Also sync in-memory ride.vehicleColours so OpenRCT2 ride window reflects each car's live color
+                            // Sync in-memory ride.vehicleColours
                             try {
                                 if (vRide.vehicleColours && carPos < vRide.vehicleColours.length) {
                                     vRide.vehicleColours[carPos] = { body: cBody, trim: cTrim, tertiary: cTert };
                                 }
                             } catch (e) {}
 
-                            // If this ride is the selected ride, dispatch ridesetappearance for car index so the in-game UI updates
-                            if (st.chromaTarget === 0 && selRide && vRide.id === selRide.id && tIdx === 0) {
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
+                            // Dispatch ridesetappearance so OpenRCT2 internal engine updates the vehicleColours slot!
+                            var appIdx = (vehMode === 0) ? carPos : ((vehMode === 1) ? tIdx : 0);
+                            if (vehMode !== 0 || tIdx === 0) {
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: appIdx }, function() {});
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: appIdx }, function() {});
+                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: appIdx }, function() {});
                             }
 
                             currentCarId = car.nextCarOnTrain;
@@ -1391,7 +1410,25 @@ var chromaWindow = (function(wConfig) {
                                 width: '65%',
                                 selectedIndex: Mt(styleStore, function(st) { return st.chromaVehicleMode !== undefined ? st.chromaVehicleMode : 0; }),
                                 disabled: Mt(styleStore, function(st) { return !st.chromaVehicles; }),
-                                onChange: function(idx) { updateStyleState({ chromaVehicleMode: idx }); }
+                                onChange: function(idx) {
+                                    updateStyleState({ chromaVehicleMode: idx });
+                                    var targetScheme = (idx === 0) ? 2 : ((idx === 1) ? 1 : 0);
+                                    lastSyncVehicleMode = targetScheme;
+                                    var st = styleStore.get();
+                                    var allR = getRides();
+                                    var targetRides = (st.chromaTarget === 0 && st.targetRideIndex >= 0 && st.targetRideIndex < allR.length) ? [allR[st.targetRideIndex]] : allR;
+                                    for (var i = 0; i < targetRides.length; i++) {
+                                        var r = targetRides[i];
+                                        if (r && (!r.object || r.object.carsPerFlatRide === 0)) {
+                                            context.executeAction('ridesetappearance', {
+                                                ride: r.id,
+                                                type: 6,
+                                                value: targetScheme,
+                                                index: 0
+                                            }, function() {});
+                                        }
+                                    }
+                                }
                             })
                         ]
                     }),
