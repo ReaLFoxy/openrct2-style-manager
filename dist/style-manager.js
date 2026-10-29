@@ -1000,7 +1000,7 @@ var mainThemeWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 410, min: 410, max: 410 },
+    height: { value: 440, min: 440, max: 440 },
     onOpen: syncRideList,
     content: [
         createTabRow(0),
@@ -1337,7 +1337,7 @@ var chromaWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 445, min: 445, max: 445 },
+    height: { value: 450, min: 450, max: 450 },
     onOpen: syncRideList,
     content: [
         createTabRow(2),
