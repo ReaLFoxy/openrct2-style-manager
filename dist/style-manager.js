@@ -328,8 +328,8 @@ function updateStyleState(patch) {
 
 function isFlatRide(ride) {
     try {
-        if (ride && ride.object && ride.object.carsPerFlatRide > 0) {
-            return true;
+        if (ride && ride.object && ride.object.carsPerFlatRide !== undefined) {
+            return ride.object.carsPerFlatRide !== 255 && ride.object.carsPerFlatRide > 0;
         }
     } catch (e) {}
     return false;
@@ -812,24 +812,26 @@ function onChromaTick() {
                                 }
                             } catch (e) {}
 
-                            // Dispatch ridesetappearance so OpenRCT2 internal engine updates the vehicleColours slot!
-                            if (vehMode === 0) {
-                                if (tIdx === 0) {
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
-                                }
-                            } else if (vehMode === 1) {
-                                if (carPos === 0) {
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: tIdx }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: tIdx }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: tIdx }, function() {});
-                                }
-                            } else {
-                                if (tIdx === 0 && carPos === 0) {
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: 0 }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: 0 }, function() {});
-                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: 0 }, function() {});
+                            // Dispatch ridesetappearance for the selected ride so OpenRCT2 in-game UI updates without overflowing the action queue
+                            if (selRide && vRide.id === selRide.id) {
+                                if (vehMode === 0) {
+                                    if (tIdx === 0) {
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
+                                    }
+                                } else if (vehMode === 1) {
+                                    if (carPos === 0) {
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: tIdx }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: tIdx }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: tIdx }, function() {});
+                                    }
+                                } else {
+                                    if (tIdx === 0 && carPos === 0) {
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: 0 }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: 0 }, function() {});
+                                        context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: 0 }, function() {});
+                                    }
                                 }
                             }
 
