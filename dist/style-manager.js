@@ -251,7 +251,7 @@ var initialStyleState = {
     chromaMode: 0,      // 0 = Breathing RGB (Snake Wave), 1 = Classic Rainbow Spectrum
     chromaTarget: 1,    // 0 = Selected Ride Only, 1 = All Park Rides (Default to All Park Rides)
     chromaVehicles: true,
-    chromaMultiVehicle: true,
+    chromaVehicleMode: 0, // 0 = Per Car (Rainbow Cars), 1 = Per Train (Distinct Trains), 2 = All Same (Synchronized)
     chromaBalloons: true,
     chromaGuests: true,
     chromaTrack: true,  // Enabled by default!
@@ -315,7 +315,7 @@ function updateStyleState(patch) {
                     chromaMode: updated.chromaMode !== undefined ? updated.chromaMode : 0,
                     chromaTarget: updated.chromaTarget,
                     chromaVehicles: updated.chromaVehicles,
-                    chromaMultiVehicle: updated.chromaMultiVehicle !== undefined ? updated.chromaMultiVehicle : true,
+                    chromaVehicleMode: updated.chromaVehicleMode !== undefined ? updated.chromaVehicleMode : 0,
                     chromaBalloons: updated.chromaBalloons,
                     chromaGuests: updated.chromaGuests,
                     chromaTrack: updated.chromaTrack,
@@ -715,6 +715,7 @@ function onChromaTick() {
     if (st.chromaVehicles) {
         var vehBaseStep = (chromaStep + 8) % stepCount; // 8-step offset from rails for vibrant contrast
         var ridesForVehicles = (st.chromaTarget === 0) ? (selRide ? [selRide] : []) : allRides;
+        var vehMode = (st.chromaVehicleMode !== undefined) ? st.chromaVehicleMode : 0; // 0 = Per Car, 1 = Per Train, 2 = All Same
 
         for (var rIdx = 0; rIdx < ridesForVehicles.length; rIdx++) {
             var vRide = ridesForVehicles[rIdx];
@@ -731,7 +732,6 @@ function onChromaTick() {
 
             if (isFlat) {
                 // Flat Rides: Merry-go-round, Enterprise, Ferris Wheel, etc.
-                // Painted via ride.vehicleColours[0] (Body, Trim, Tertiary).
                 var fStep = (vehBaseStep + rVehOffset) % stepCount;
                 var fBody = activePalette[fStep];
                 var fTrim = isBreathing ? activePalette[(fStep + 1) % stepCount] : activePalette[(fStep + 2) % stepCount];
@@ -744,12 +744,20 @@ function onChromaTick() {
                 // Track Rides with moving cars (Roller Coasters, Go-Karts, Car Rides, etc.)
                 var trainVehicles = vRide.vehicles;
                 if (trainVehicles && trainVehicles.length > 0) {
+                    var isSingleCarRides = (vRide.numCarsPerTrain === 1 || trainVehicles.length > 4);
+
                     for (var tIdx = 0; tIdx < trainVehicles.length; tIdx++) {
                         var currentCarId = trainVehicles[tIdx];
                         var carPos = 0;
 
-                        // Train-by-train phase offset:
-                        var trainShift = (st.chromaMultiVehicle !== false) ? (tIdx * (isBreathing ? 4 : 5)) : 0;
+                        // Mode 1: Per Train -> Each train has a different color family; all cars in that train match.
+                        // Mode 0: Per Car -> trainShift is 0 so ALL trains share the identical per-car color spectrum!
+                        var trainShift = 0;
+                        if (vehMode === 1) {
+                            trainShift = tIdx * (isBreathing ? 4 : 5);
+                        } else if (vehMode === 0 && isSingleCarRides) {
+                            trainShift = tIdx * (isBreathing ? 2 : 3);
+                        }
 
                         while (currentCarId !== null && currentCarId !== undefined) {
                             var car = map.getEntity(currentCarId);
@@ -757,8 +765,12 @@ function onChromaTick() {
                                 break;
                             }
 
-                            // Car-by-car wave along the train (Snake Comet Trail):
-                            var carShift = (st.chromaMultiVehicle !== false) ? (carPos * (isBreathing ? 1 : 2)) : 0;
+                            // Mode 0: Per Car -> Each car along the train advances (+1 step in Breathing, +2 in Classic)!
+                            // Mode 1: Per Train & Mode 2: All Same -> carShift is 0 so all cars in the train share the same color.
+                            var carShift = 0;
+                            if (vehMode === 0) {
+                                carShift = carPos * (isBreathing ? 1 : 2);
+                            }
 
                             var cStep = (vehBaseStep + rVehOffset + trainShift + carShift) % stepCount;
                             var cBody = activePalette[cStep];
@@ -954,7 +966,7 @@ var mainThemeWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 435, min: 435, max: 435 },
+    height: { value: 410, min: 410, max: 410 },
     onOpen: syncRideList,
     content: [
         createTabRow(0),
@@ -1291,7 +1303,7 @@ var chromaWindow = (function(wConfig) {
 })({
     title: 'Style Manager (v0.1.0-beta)',
     width: { value: 320, min: 320, max: 320 },
-    height: { value: 435, min: 435, max: 435 },
+    height: { value: 445, min: 445, max: 445 },
     onOpen: syncRideList,
     content: [
         createTabRow(2),
@@ -1354,6 +1366,22 @@ var chromaWindow = (function(wConfig) {
                     }),
                     ht({
                         content: [
+                            Gt({ text: 'Vehicle Style:', width: '35%' }),
+                            (function(c) { return w(c), function(n, i) { return new zt(n, i, c); }; })({
+                                items: [
+                                    'Per Car (Rainbow Cars)',
+                                    'Per Train (Distinct Trains)',
+                                    'All Same (Synchronized)'
+                                ],
+                                width: '65%',
+                                selectedIndex: Mt(styleStore, function(st) { return st.chromaVehicleMode !== undefined ? st.chromaVehicleMode : 0; }),
+                                disabled: Mt(styleStore, function(st) { return !st.chromaVehicles; }),
+                                onChange: function(idx) { updateStyleState({ chromaVehicleMode: idx }); }
+                            })
+                        ]
+                    }),
+                    ht({
+                        content: [
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
                                 text: 'Vehicles (Cars & Flat)',
                                 width: '50%',
@@ -1361,35 +1389,24 @@ var chromaWindow = (function(wConfig) {
                                 onChange: function(val) { updateStyleState({ chromaVehicles: val }); }
                             }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Multi-Train Wave FX',
+                                text: 'Tracks (Wave)',
                                 width: '50%',
-                                isChecked: styleStore.get().chromaMultiVehicle !== false,
-                                disabled: Mt(styleStore, function(st) { return !st.chromaVehicles; }),
-                                onChange: function(val) { updateStyleState({ chromaMultiVehicle: val }); }
+                                isChecked: styleStore.get().chromaTrack,
+                                onChange: function(val) { updateStyleState({ chromaTrack: val }); }
                             })
                         ]
                     }),
                     ht({
                         content: [
-                            (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Tracks (Wave)',
-                                width: '50%',
-                                isChecked: styleStore.get().chromaTrack,
-                                onChange: function(val) { updateStyleState({ chromaTrack: val }); }
-                            }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
                                 text: 'Balloons & Umbrellas',
                                 width: '50%',
                                 isChecked: styleStore.get().chromaBalloons,
                                 onChange: function(val) { updateStyleState({ chromaBalloons: val }); }
-                            })
-                        ]
-                    }),
-                    ht({
-                        content: [
+                            }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
                                 text: 'Guest Clothes (T-shirts)',
-                                width: '100%',
+                                width: '50%',
                                 isChecked: styleStore.get().chromaGuests,
                                 onChange: function(val) { updateStyleState({ chromaGuests: val }); }
                             })
