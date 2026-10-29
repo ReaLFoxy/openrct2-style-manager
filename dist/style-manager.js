@@ -326,6 +326,15 @@ function updateStyleState(patch) {
     } catch (e) {}
 }
 
+function isFlatRide(ride) {
+    try {
+        if (ride && ride.object && ride.object.carsPerFlatRide > 0) {
+            return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
 function getRides() {
     try {
         if (typeof map !== 'undefined' && map.rides) {
@@ -478,12 +487,15 @@ function applyTrackColours(ride, palette) {
 }
 
 function applyVehicleColours(ride, palette) {
-    var isFlat = false;
-    try {
-        if (ride.object && ride.object.carsPerFlatRide > 0) {
-            isFlat = true;
-        }
-    } catch (e) {}
+    var isFlat = isFlatRide(ride);
+    if (!isFlat) {
+        context.executeAction('ridesetappearance', {
+            ride: ride.id,
+            type: 6,
+            value: 0,
+            index: 0
+        }, function() {});
+    }
 
     var numSchemes = isFlat ? 1 : Math.min((ride.vehicleColours && ride.vehicleColours.length > 0) ? ride.vehicleColours.length : 1, 4);
     for (var v = 0; v < numSchemes; v++) {
@@ -725,7 +737,7 @@ function onChromaTick() {
             lastSyncVehicleMode = targetScheme;
             for (var sIdx = 0; sIdx < ridesForVehicles.length; sIdx++) {
                 var rSync = ridesForVehicles[sIdx];
-                if (rSync && (!rSync.object || rSync.object.carsPerFlatRide === 0)) {
+                if (rSync && !isFlatRide(rSync)) {
                     context.executeAction('ridesetappearance', {
                         ride: rSync.id,
                         type: 6,
@@ -740,13 +752,7 @@ function onChromaTick() {
             var vRide = ridesForVehicles[rIdx];
             if (!vRide) continue;
 
-            var isFlat = false;
-            try {
-                if (vRide.object && vRide.object.carsPerFlatRide > 0) {
-                    isFlat = true;
-                }
-            } catch (e) {}
-
+            var isFlat = isFlatRide(vRide);
             var rVehOffset = (st.chromaTarget === 0) ? 0 : (rIdx * 3);
 
             if (isFlat) {
@@ -785,6 +791,7 @@ function onChromaTick() {
                             }
 
                             // Mode 0: Per Car -> Each car gets its color from palette, and shifts backward each tick!
+                            // Waves push backward each tick: Car 0 -> Car 1 -> Car 2... regardless of car count!
                             var carShift = 0;
                             if (vehMode === 0) {
                                 carShift = carPos * 1;
@@ -798,7 +805,7 @@ function onChromaTick() {
 
                             car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
 
-                            // Sync in-memory ride.vehicleColours
+                            // Sync in-memory ride.vehicleColours for any number of cars
                             try {
                                 if (vRide.vehicleColours && carPos < vRide.vehicleColours.length) {
                                     vRide.vehicleColours[carPos] = { body: cBody, trim: cTrim, tertiary: cTert };
@@ -806,11 +813,24 @@ function onChromaTick() {
                             } catch (e) {}
 
                             // Dispatch ridesetappearance so OpenRCT2 internal engine updates the vehicleColours slot!
-                            var appIdx = (vehMode === 0) ? carPos : ((vehMode === 1) ? tIdx : 0);
-                            if (vehMode !== 0 || tIdx === 0) {
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: appIdx }, function() {});
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: appIdx }, function() {});
-                                context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: appIdx }, function() {});
+                            if (vehMode === 0) {
+                                if (tIdx === 0) {
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: carPos }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: carPos }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: carPos }, function() {});
+                                }
+                            } else if (vehMode === 1) {
+                                if (carPos === 0) {
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: tIdx }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: tIdx }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: tIdx }, function() {});
+                                }
+                            } else {
+                                if (tIdx === 0 && carPos === 0) {
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 3, value: cBody, index: 0 }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 4, value: cTrim, index: 0 }, function() {});
+                                    context.executeAction('ridesetappearance', { ride: vRide.id, type: 5, value: cTert, index: 0 }, function() {});
+                                }
                             }
 
                             currentCarId = car.nextCarOnTrain;
@@ -1379,7 +1399,10 @@ var chromaWindow = (function(wConfig) {
                                 items: ['Selected Ride Only', 'All Park Rides'],
                                 width: '70%',
                                 selectedIndex: Mt(styleStore, function(st) { return st.chromaTarget; }),
-                                onChange: function(idx) { updateStyleState({ chromaTarget: idx }); }
+                                onChange: function(idx) {
+                                    updateStyleState({ chromaTarget: idx });
+                                    lastSyncVehicleMode = -1;
+                                }
                             })
                         ]
                     }),
@@ -1394,7 +1417,10 @@ var chromaWindow = (function(wConfig) {
                                 width: '70%',
                                 selectedIndex: Mt(styleStore, function(st) { return st.targetRideIndex; }),
                                 disabled: Mt(styleStore, function(st) { return st.chromaTarget === 1; }),
-                                onChange: function(idx) { updateStyleState({ targetRideIndex: idx }); }
+                                onChange: function(idx) {
+                                    updateStyleState({ targetRideIndex: idx });
+                                    lastSyncVehicleMode = -1;
+                                }
                             })
                         ]
                     }),
@@ -1419,7 +1445,7 @@ var chromaWindow = (function(wConfig) {
                                     var targetRides = (st.chromaTarget === 0 && st.targetRideIndex >= 0 && st.targetRideIndex < allR.length) ? [allR[st.targetRideIndex]] : allR;
                                     for (var i = 0; i < targetRides.length; i++) {
                                         var r = targetRides[i];
-                                        if (r && (!r.object || r.object.carsPerFlatRide === 0)) {
+                                        if (r && !isFlatRide(r)) {
                                             context.executeAction('ridesetappearance', {
                                                 ride: r.id,
                                                 type: 6,
