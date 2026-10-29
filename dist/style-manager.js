@@ -796,7 +796,7 @@ function onChromaTick() {
                         var cTrim = isBreathing ? activePalette[(cStep + 1) % stepCount] : activePalette[(cStep + 2) % stepCount];
                         var cTert = isBreathing ? activePalette[(cStep + stepCount - 1) % stepCount] : activePalette[(cStep + 4) % stepCount];
 
-                        // DIRECT MEMORY SET - 100% Zero-Lag!
+                        // DIRECT MEMORY SET - 100% Zero-Lag for moving trains!
                         car.colours = { body: cBody, trim: cTrim, tertiary: cTert };
 
                         currentCarId = car.nextCarOnTrain;
@@ -807,31 +807,23 @@ function onChromaTick() {
         }
 
         // 1B. Flat Rides (Carousel, Enterprise, Ferris Wheel, etc.)
-        // Flat rides use ride.vehicleColours[0] (3 actions)
         var targetFlatRides = (st.chromaTarget === 0) ? (selRide && isFlatRide(selRide) ? [selRide] : []) : flatRides;
-        if (targetFlatRides.length > 0) {
-            // If target is single ride, update it. If all park, stagger 1 flat ride per cycle to eliminate lag!
-            var flatsToUpdate = (st.chromaTarget === 0)
-                ? targetFlatRides
-                : [targetFlatRides[chromaStep % targetFlatRides.length]];
+        for (var fIdx = 0; fIdx < targetFlatRides.length; fIdx++) {
+            var fRide = targetFlatRides[fIdx];
+            if (!fRide || fRide.status === 'closed') continue;
 
-            for (var fIdx = 0; fIdx < flatsToUpdate.length; fIdx++) {
-                var fRide = flatsToUpdate[fIdx];
-                if (!fRide || fRide.status === 'closed') continue;
+            var fStep = (vehBaseStep + fIdx * 3) % stepCount;
+            var fBody = activePalette[fStep];
+            var fTrim = isBreathing ? activePalette[(fStep + 1) % stepCount] : activePalette[(fStep + 2) % stepCount];
+            var fTert = isBreathing ? activePalette[(fStep + stepCount - 1) % stepCount] : activePalette[(fStep + 4) % stepCount];
 
-                var fStep = (vehBaseStep + fIdx * 3) % stepCount;
-                var fBody = activePalette[fStep];
-                var fTrim = isBreathing ? activePalette[(fStep + 1) % stepCount] : activePalette[(fStep + 2) % stepCount];
-                var fTert = isBreathing ? activePalette[(fStep + stepCount - 1) % stepCount] : activePalette[(fStep + 4) % stepCount];
-
-                context.executeAction('ridesetappearance', { ride: fRide.id, type: 3, value: fBody, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: fRide.id, type: 4, value: fTrim, index: 0 }, function() {});
-                context.executeAction('ridesetappearance', { ride: fRide.id, type: 5, value: fTert, index: 0 }, function() {});
-            }
+            context.executeAction('ridesetappearance', { ride: fRide.id, type: 3, value: fBody, index: 0 }, function() {});
+            context.executeAction('ridesetappearance', { ride: fRide.id, type: 4, value: fTrim, index: 0 }, function() {});
+            context.executeAction('ridesetappearance', { ride: fRide.id, type: 5, value: fTert, index: 0 }, function() {});
         }
     }
 
-    // 2. Guests & Balloons (Batched / Throttled for 60 FPS performance)
+    // 2. Guests & Balloons (Direct In-Memory, executed every 2 intervals to maintain 60 FPS)
     if (st.chromaGuests || st.chromaBalloons) {
         if (chromaTickCounter % (interval * 2) === 0) {
             try {
@@ -865,31 +857,11 @@ function onChromaTick() {
         }
     }
 
-    // 3. Tracks (Rainbow Track Wave - Staggered to prevent game action queue lag)
+    // 3. Tracks (Full 3 x 4 = 12 Slots: Main, Alt 1, Alt 2, Alt 3 shifting forward simultaneously at full speed!)
     if (st.chromaTrack && trackRides.length > 0) {
-        var ridesToProcess = [];
-        if (st.chromaTarget === 0) {
-            if (selRide && !isFlatRide(selRide)) {
-                ridesToProcess.push(selRide);
-            }
-        } else {
-            // Stagger 2 rides per cycle so the game runs at full 60 FPS without action queue drops!
-            // If user selected a ride, always include it, plus 1 rotating ride
-            if (selRide && !isFlatRide(selRide)) {
-                ridesToProcess.push(selRide);
-                var rotIdx = chromaStep % trackRides.length;
-                if (trackRides[rotIdx].id !== selRide.id) {
-                    ridesToProcess.push(trackRides[rotIdx]);
-                }
-            } else {
-                var r1 = chromaStep % trackRides.length;
-                var r2 = (chromaStep + 1) % trackRides.length;
-                ridesToProcess.push(trackRides[r1]);
-                if (r1 !== r2) {
-                    ridesToProcess.push(trackRides[r2]);
-                }
-            }
-        }
+        var ridesToProcess = (st.chromaTarget === 0)
+            ? (selRide && !isFlatRide(selRide) ? [selRide] : [])
+            : trackRides;
 
         for (var rIdx = 0; rIdx < ridesToProcess.length; rIdx++) {
             var ride = ridesToProcess[rIdx];
@@ -898,9 +870,8 @@ function onChromaTick() {
             var rBasePhase = (st.chromaTarget === 0) ? 0 : (isBreathing ? (rIdx % 4) : (rIdx % stepCount));
             var rideBaseStep = (chromaStep + rBasePhase) % stepCount;
 
-            // Only update up to the schemes the ride actually uses (1 or 4)
-            var maxSchemes = (ride.colourSchemes && ride.colourSchemes.length > 1) ? 4 : 1;
-            for (var sIdx = 0; sIdx < maxSchemes; sIdx++) {
+            // Update all 4 Schemes (0: Main, 1: Alt 1, 2: Alt 2, 3: Alt 3)
+            for (var sIdx = 0; sIdx < 4; sIdx++) {
                 var sStep = (rideBaseStep + sIdx) % stepCount;
                 var sSpine, sRails, sSupports;
 
