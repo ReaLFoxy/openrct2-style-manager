@@ -36,7 +36,7 @@ A comprehensive theme, color scheme, and real-time aesthetic management plugin f
   * Full 32-color native OpenRCT2 palette picker for Main (Track/Body), Sub (Rails/Trim), and Support (Pillars/Tertiary).
 * **Flexible Scope & Target Selection**:
   * Apply to **Single Selected Ride** or **All Rides in Park**.
-  * Selective component toggles: `Tracks`, `Vehicles`, `Stations`, `Guests & Stalls`.
+  * Selective component toggles: `Tracks`, `Vehicles`, `Stations`, `Guests, Stalls & Staff`.
 
 ---
 
@@ -69,7 +69,7 @@ Experience dynamic, fluid, real-time color animations across your park running a
 * **Multi-Target Animation**:
   * **Tracks**: Synchronous 12-slot wave animation cycling Main and Alt 1–3 schemes across all coaster tracks simultaneously.
   * **Vehicles**: Real-time coloring for roller coaster trains, tracked rides, and flat rides (Carousel, Ferris Wheel, Enterprise, etc.).
-  * **Guests & Shops (Merchandise)**: Live color transitions for guest T-shirts, hats, umbrellas, and balloons, synchronized with stall sprites (Balloon Stalls, Souvenir Stalls, Hat Stalls, T-Shirt Stalls, Information Kiosks, and facilities).
+  * **Guests, Staff & Shops**: Live color transitions for guest clothes, staff uniforms (Handyman, Mechanic, Security), umbrellas, and balloons, synchronized with stall sprites (Balloon Stalls, Souvenir Stalls, Hat Stalls, T-Shirt Stalls, Information Kiosks, and facilities).
 * **Speed Controls**:
   * `Slow (Chill Wave)`
   * `Normal (Classic Chroma)`
