@@ -344,6 +344,26 @@ function getRides() {
     return [];
 }
 
+function getStalls() {
+    try {
+        if (typeof map !== 'undefined' && map.rides) {
+            return map.rides.filter(function(r) {
+                if (!r || r.classification !== 'stall') return false;
+                try {
+                    if (r.object && r.object.flags !== undefined) {
+                        // (1 << 19) = 524288 is disableColourTab (skip non-paintable food stalls)
+                        if ((r.object.flags & 524288) !== 0) {
+                            return false;
+                        }
+                    }
+                } catch (e) {}
+                return true;
+            });
+        }
+    } catch (e) {}
+    return [];
+}
+
 function getActivePreset() {
     var st = styleStore.get();
     for (var i = 0; i < STYLE_PRESETS.length; i++) {
@@ -581,21 +601,13 @@ function executeApplyParkWide() {
         } catch (e) {}
 
         try {
-            rides.forEach(function(ride) {
-                if (ride.classification === 'stall') {
-                    context.executeAction('ridesetappearance', {
-                        ride: ride.id,
-                        type: 3,
-                        value: palette.guest.balloon,
-                        index: 0
-                    }, function() {});
-                    context.executeAction('ridesetappearance', {
-                        ride: ride.id,
-                        type: 4,
-                        value: palette.guest.umbrella,
-                        index: 0
-                    }, function() {});
-                }
+            var parkStalls = getStalls();
+            parkStalls.forEach(function(s) {
+                context.executeAction('ridesetappearance', { ride: s.id, type: 0, value: palette.guest.balloon, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: s.id, type: 1, value: palette.guest.umbrella, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: s.id, type: 2, value: palette.track.sup, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: s.id, type: 3, value: palette.guest.balloon, index: 0 }, function() {});
+                context.executeAction('ridesetappearance', { ride: s.id, type: 4, value: palette.guest.umbrella, index: 0 }, function() {});
             });
         } catch (e) {}
     }
@@ -900,6 +912,52 @@ function onChromaTick() {
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 1, value: sRails, index: sIdx }, function() {});
                 context.executeAction('ridesetappearance', { ride: ride.id, type: 2, value: sSupports, index: sIdx }, function() {});
             }
+        }
+    }
+
+    // 4. Stalls & Shops (Balloon Stalls, Souvenir Stalls, Hat Stalls, T-Shirt Stalls, Info Kiosks, etc.)
+    if (st.chromaBalloons) {
+        var stalls = getStalls();
+        for (var stIdx = 0; stIdx < stalls.length; stIdx++) {
+            var stall = stalls[stIdx];
+            if (!stall) continue;
+
+            var sObj = stall.object;
+            var sItem = sObj ? sObj.shopItem : -1;
+            var sItem2 = sObj ? sObj.shopItemSecondary : -1;
+
+            var itemPhase = 0;
+            if (sItem === 0 || sItem2 === 0) {
+                // Balloon: synchronized with guest balloon phase
+                itemPhase = isBreathing ? 2 : 2;
+            } else if (sItem === 4 || sItem2 === 4) {
+                // Umbrella: synchronized with guest umbrella phase
+                itemPhase = isBreathing ? 0 : 6;
+            } else if (sItem === 18 || sItem2 === 18) {
+                // Hat: synchronized with guest hat phase
+                itemPhase = isBreathing ? 1 : 4;
+            } else if (sItem === 20 || sItem2 === 20) {
+                // T-shirt: synchronized with guest t-shirt phase
+                itemPhase = 0;
+            } else {
+                itemPhase = (stIdx * 3) % stepCount;
+            }
+
+            var stallStep = (chromaStep + itemPhase) % stepCount;
+            var stallMain = activePalette[stallStep];
+            var stallAdd  = isBreathing ? activePalette[(stallStep + 1) % stepCount] : activePalette[(stallStep + 2) % stepCount];
+            var stallSup  = isBreathing ? activePalette[(stallStep + stepCount - 1) % stepCount] : activePalette[(stallStep + 4) % stepCount];
+
+            // Type 0: Main item/merchandise colour (changes balloons on stall, umbrellas, hats, t-shirts!)
+            context.executeAction('ridesetappearance', { ride: stall.id, type: 0, value: stallMain, index: 0 }, function() {});
+            // Type 1: Additional / stall awning & counter trim
+            context.executeAction('ridesetappearance', { ride: stall.id, type: 1, value: stallAdd, index: 0 }, function() {});
+            // Type 2: Supports / foundation
+            context.executeAction('ridesetappearance', { ride: stall.id, type: 2, value: stallSup, index: 0 }, function() {});
+            // Type 3: Vehicle body / structure
+            context.executeAction('ridesetappearance', { ride: stall.id, type: 3, value: stallMain, index: 0 }, function() {});
+            // Type 4: Vehicle trim
+            context.executeAction('ridesetappearance', { ride: stall.id, type: 4, value: stallAdd, index: 0 }, function() {});
         }
     }
 }
@@ -1444,7 +1502,7 @@ var chromaWindow = (function(wConfig) {
                     ht({
                         content: [
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Balloons & Umbrellas',
+                                text: 'Balloons & Shops',
                                 width: '50%',
                                 isChecked: styleStore.get().chromaBalloons,
                                 onChange: function(val) { updateStyleState({ chromaBalloons: val }); }
