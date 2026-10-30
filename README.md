@@ -69,7 +69,7 @@ Experience dynamic, fluid, real-time color animations across your park running a
 * **Multi-Target Animation**:
   * **Tracks**: Synchronous 12-slot wave animation cycling Main and Alt 1–3 schemes across all coaster tracks simultaneously.
   * **Vehicles**: Real-time coloring for roller coaster trains, tracked rides, and flat rides (Carousel, Ferris Wheel, Enterprise, etc.).
-  * **Guests & Merchandise**: Live color transitions for guest T-shirts, hats, umbrellas, and balloons.
+  * **Guests & Shops (Merchandise)**: Live color transitions for guest T-shirts, hats, umbrellas, and balloons, synchronized with stall sprites (Balloon Stalls, Souvenir Stalls, Hat Stalls, T-Shirt Stalls, Information Kiosks, and facilities).
 * **Speed Controls**:
   * `Slow (Chill Wave)`
   * `Normal (Classic Chroma)`
