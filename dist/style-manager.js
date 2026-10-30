@@ -601,6 +601,23 @@ function executeApplyParkWide() {
         } catch (e) {}
 
         try {
+            var staffColorH = palette.guest.tshirt;
+            var staffColorM = palette.track.main;
+            var staffColorSec = palette.track.sup;
+            context.executeAction('staffsetcolour', { staffType: 0, colour: staffColorH }, function() {});
+            context.executeAction('staffsetcolour', { staffType: 1, colour: staffColorM }, function() {});
+            context.executeAction('staffsetcolour', { staffType: 2, colour: staffColorSec }, function() {});
+            var allStaff = map.getAllEntities('staff');
+            for (var stIdx = 0; stIdx < allStaff.length; stIdx++) {
+                var sm = allStaff[stIdx];
+                if (!sm) continue;
+                var sc = (sm.staffType === 'mechanic') ? staffColorM : ((sm.staffType === 'security') ? staffColorSec : staffColorH);
+                try { sm.colour = sc; } catch (e1) {}
+                try { sm.tShirtColour = sc; sm.trousersColour = sc; } catch (e2) {}
+            }
+        } catch (e) {}
+
+        try {
             var parkStalls = getStalls();
             parkStalls.forEach(function(s) {
                 context.executeAction('ridesetappearance', { ride: s.id, type: 0, value: palette.guest.balloon, index: 0 }, function() {});
@@ -876,6 +893,31 @@ function onChromaTick() {
                     }
                 }
             } catch (e) {}
+
+            // Staff (Handyman, Mechanic, Security) Uniform RGB Cycle
+            if (st.chromaGuests) {
+                try {
+                    var staffMembers = map.getAllEntities('staff');
+                    for (var smIdx = 0; smIdx < staffMembers.length; smIdx++) {
+                        var staff = staffMembers[smIdx];
+                        if (!staff) continue;
+                        var sTypeOffset = (staff.staffType === 'handyman') ? 0
+                            : ((staff.staffType === 'mechanic') ? (isBreathing ? 2 : 3)
+                            : ((staff.staffType === 'security') ? (isBreathing ? 4 : 5) : 0));
+                        var staffCol = activePalette[(chromaStep + sTypeOffset) % stepCount];
+                        try { staff.colour = staffCol; } catch (e1) {}
+                        try { staff.tShirtColour = staffCol; staff.trousersColour = staffCol; } catch (e2) {}
+                    }
+
+                    // Synchronize park-wide staff uniform presets
+                    var hCol = activePalette[chromaStep % stepCount];
+                    var mCol = activePalette[(chromaStep + (isBreathing ? 2 : 3)) % stepCount];
+                    var secCol = activePalette[(chromaStep + (isBreathing ? 4 : 5)) % stepCount];
+                    context.executeAction('staffsetcolour', { staffType: 0, colour: hCol }, function() {});
+                    context.executeAction('staffsetcolour', { staffType: 1, colour: mCol }, function() {});
+                    context.executeAction('staffsetcolour', { staffType: 2, colour: secCol }, function() {});
+                } catch (e) {}
+            }
         }
     }
 
@@ -1183,7 +1225,7 @@ var mainThemeWindow = (function(wConfig) {
                                 onChange: function(val) { updateStyleState({ globalStation: val }); }
                             }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'All guests & stalls',
+                                text: 'All guests, stalls & staff',
                                 width: '50%',
                                 isChecked: styleStore.get().globalGuests,
                                 onChange: function(val) { updateStyleState({ globalGuests: val }); }
@@ -1508,7 +1550,7 @@ var chromaWindow = (function(wConfig) {
                                 onChange: function(val) { updateStyleState({ chromaBalloons: val }); }
                             }),
                             (function(c) { return w(c), function(n, i) { return new Tt(n, i, c); }; })({
-                                text: 'Guest Clothes (T-shirts)',
+                                text: 'Guests & Staff Clothes',
                                 width: '50%',
                                 isChecked: styleStore.get().chromaGuests,
                                 onChange: function(val) { updateStyleState({ chromaGuests: val }); }
